@@ -1,5 +1,6 @@
 ---
-title: "Project_proposal"
+title: "Project Proposal"
 format: html
 ---
 
+### Group Member: Devin Lin, Yumeng Wu
