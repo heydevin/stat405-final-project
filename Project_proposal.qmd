@@ -3,4 +3,4 @@ title: "Project Proposal"
 format: html
 ---
 
-### Group Member: Devin Lin, Yumeng Wu
+### Group Member: Desheng Lin, Yumeng Wu
