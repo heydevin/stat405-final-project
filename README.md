@@ -1,2 +1,7 @@
-A STAT405 final project focusing on Bayesian model.
-Group Member: Desheng Lin, Yumeng Wu
+# Final Project
+## A project for STAT405 focusing on Bayesian models.
+### Group Members: Desheng Lin, Yumeng Wu
+
+We want to use the NBA salary dataset and the NBA performance dataset to make prediction/inference.
+
+
