@@ -3,4 +3,40 @@ title: "Project Proposal"
 format: html
 ---
 
-### Group Member: Desheng Lin, Yumeng Wu
+### Team Members: Desheng Lin (heydevin) , Yumeng Wu (rainieUM)
+
+#### Git Repo Link: <https://github.com/heydevin/stat405-final-project>
+
+### Two related real-world candidate datasets
+
+1.  **2025-2026 NBA Player Stats \| Regular Season -** <https://www.nbastuffer.com/2025-2026-nba-player-stats/>
+
+```{r}
+NBA_Player_Stats <- read.csv("Project_proposal_files/data/2025-2026 NBA Player Stats - NBAstuffer.csv")
+
+head(NBA_Player_Stats)
+```
+
+2.  **2025-26 NBA Player Contracts** - <https://www.basketball-reference.com/contracts/players.html>
+
+```{r}
+NBA_Player_Contracts <- read.csv("Project_proposal_files/data/2025-26 NBA Player Contracts.csv")
+
+head(NBA_Player_Contracts)
+```
+
+### Scientific Questions:
+
+1.  How do specific on-court performance metrics (e.g., True Shooting Percentage) impact an NBA player's expected contract salaries?
+2.  Can we use the posterior predictive distribution to identify players who are significantly overpaid or underpaid relative to their market value?
+3.  Does the valuation structure of these on-court performance metrics vary fundamentally across different player positions (e.g., Guards vs. Centers)?
+
+### Methodology Plan:
+
+To answer our question regarding the impact of performance metrics on salaries, we will construct a Bayesian regression model, which is likely a naive model. We will choose the expected contract salary as the response variable, using players on-court metrics (e.g., True Shooting Percentage) to do inferences.
+
+We can compute the posterior of the naive model using SNIS algorithm coded in R and MCMC method implemented in Stan, compare these two methods and evaluate them.
+
+### Short plans:
+
+Desheng and Yumeng will together design, implement the coding and writing the project. Both members will equally collaborate on the project proposal and the final report.
