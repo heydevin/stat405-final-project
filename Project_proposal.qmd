@@ -33,10 +33,10 @@ head(NBA_Player_Contracts)
 
 ### Methodology Plan:
 
-To answer our question regarding the impact of performance metrics on salaries, we will construct a Bayesian regression model, which is likely a naive model. We will choose the expected contract salary as the response variable, using players on-court metrics (e.g., True Shooting Percentage) to do inferences.
+To answer our question regarding the impact of player's performance metrics on salaries, we will construct a Bayesian regression model, which is likely a naive model. We will choose the expected contract salary as the response variable, and use players on-court metrics (e.g., True Shooting Percentage) to do inferences. Then we will take another approach to build a complex model, likely a Bayesian hierarchical model, to consider some additional factors, such as grouping the players by their listed positions (e.g., Guards, Centers).
 
-We can compute the posterior of the naive model using SNIS algorithm coded in R and MCMC method implemented in Stan, compare these two methods and evaluate them.
+We can compute the posterior of the naive model using SNIS algorithm coded in R and MCMC algorithm implemented in Stan, compare these two methods and analyze the output. As well as doing plot analysis(e.g. plotting the true salaries against the 95% posterior predictive intervals), we can identify specific players whose market compensation significantly deviates from their statistically expected value.
 
 ### Short plans:
 
-Desheng and Yumeng will together design, implement the coding and writing the project. Both members will equally collaborate on the project proposal and the final report.
+Desheng and Yumeng will together design, implement the coding and write the project. Both members will contribute equally and collaborate on the project proposal and the final report.
