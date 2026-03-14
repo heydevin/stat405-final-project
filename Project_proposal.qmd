@@ -7,21 +7,20 @@ format: html
 
 #### Git Repo Link: <https://github.com/heydevin/stat405-final-project>
 
-### Two related real-world candidate datasets
+### Main Datasets:
 
 1.  **2025-2026 NBA Player Stats \| Regular Season -** <https://www.nbastuffer.com/2025-2026-nba-player-stats/>
 
 ```{r}
-NBA_Player_Stats <- read.csv("Project_proposal_files/data/2025-2026 NBA Player Stats - NBAstuffer.csv")
-
+NBA_Player_Stats <- read.csv("Datasets/2025-2026 NBA Player Stats - NBAstuffer.csv")
+NBA_Player_Stats <- NBA_Player_Stats[, -1]
 head(NBA_Player_Stats)
 ```
 
 2.  **2025-26 NBA Player Contracts** - <https://www.basketball-reference.com/contracts/players.html>
 
 ```{r}
-NBA_Player_Contracts <- read.csv("Project_proposal_files/data/2025-26 NBA Player Contracts.csv")
-
+NBA_Player_Contracts <- read.csv("Datasets/2025-26 NBA Player Contracts.csv")
 head(NBA_Player_Contracts)
 ```
 
@@ -31,9 +30,27 @@ head(NBA_Player_Contracts)
 2.  Can we use the posterior predictive distribution to identify players who are significantly overpaid or underpaid relative to their market value?
 3.  Does the valuation structure of these on-court performance metrics vary fundamentally across different player positions (e.g., Guards vs. Centers)?
 
+### Backup Dataset:
+
+1.  **Spotify Tracks Audio Features and Popularity -**<https://huggingface.co/datasets/maharshipandya/spotify-tracks-dataset>
+
+```{r}
+Spotify_Tracks <- read.csv("Datasets/Spotify Tracks.csv")
+Spotify_Tracks <- Spotify_Tracks[, -1]
+head(Spotify_Tracks)
+```
+
+### Backup Scientific Questions:
+
+1.  How do specific audio features (e.g., loudness and energy) impact the expected popularity score of a track on Spotify?
+2.  Does the underlying relationship between these audio features and popularity vary significantly across different music genres (e.g., Pop vs. Jazz)? (This allows us to implement a Bayesian hierarchical model grouping tracks by genre).
+3.  Given a specific combination of audio features, what is the posterior predictive interval for a new song's potential popularity?
+
 ### Methodology Plan:
 
 To answer our question regarding the impact of player's performance metrics on salaries, we will construct a Bayesian regression model, which is likely a naive model. We will choose the expected contract salary as the response variable, and use players on-court metrics (e.g., True Shooting Percentage) to do inferences. Then we will take another approach to build a complex model, likely a Bayesian hierarchical model, to consider some additional factors, such as grouping the players by their listed positions (e.g., Guards, Centers).
+
+-   Since we do not have strong prior knowledge regarding the exact relationship between TS% and salary, so we will likely assign weakly informative priors for the models, and allow the data to dominate the posterior distribution.
 
 We can compute the posterior of the naive model using SNIS algorithm coded in R and MCMC algorithm implemented in Stan, compare these two methods and analyze the output. As well as doing plot analysis(e.g. plotting the true salaries against the 95% posterior predictive intervals), we can identify specific players whose market compensation significantly deviates from their statistically expected value.
 
