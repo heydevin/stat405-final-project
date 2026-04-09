@@ -20,4 +20,5 @@ The two methods we decided to use are:
 
 2.  MCMC Metropolis-Hastings
 
-    We decided to do something related to MH algorithm.
+    We decided to do something related to MH algorithm. We implemented the Metropolis-Hastings algorithm manually to sample from the posterior distribution. Then, compare the MCMC result with the Stan method. This would determine whether or not those two methods produce consistent posterior estimates.
+
