@@ -4,13 +4,17 @@ format: html
 ---
 
 ```{r}
+NBA_Player_Stats <- read.csv("Datasets/2025-2026 NBA Player Stats - NBAstuffer.csv")
+NBA_Player_Stats <- NBA_Player_Stats[, -1]
+NBA_Player_Contracts <- read.csv("Datasets/2025-26 NBA Player Contracts.csv")
 result <- merge(NBA_Player_Stats, NBA_Player_Contracts, by.x = "NAME", by.y = "Player")
 head(result)
+dim(result)
 ```
 
 We decided to do Bayesian Inference on this question: Can we use the posterior predictive distribution to identify players who are significantly overpaid or underpaid relative to their market value?
 
-First, we merged the two datasets we found into one dataset. Then do EDA on the dataset, to explore the relationships between variables.
+First, we merged the two datasets we found into one dataset. Then do EDA on the dataset, explore the distribution of variables to find if there exists patterns, outliers, and we would also want to find if there's any relationship between variables which would influence our later on analysis. We would conduct the data cleaning at this step as well by dropping some columns that are unrelated to our research question and removing the outliers we find.
 
 The two methods we decided to use are:
 
@@ -20,5 +24,47 @@ The two methods we decided to use are:
 
 2.  MCMC Metropolis-Hastings
 
-    We decided to do something related to MH algorithm. We implemented the Metropolis-Hastings algorithm manually to sample from the posterior distribution. Then, compare the MCMC result with the Stan method. This would determine whether or not those two methods produce consistent posterior estimates.
+    We decided to do something related to MH algorithm. We implemented the Metropolis-Hastings algorithm manually to sample from the posterior distribution. Then, compare the MCMC result with the Stan method result. This would determine whether or not those two methods produce consistent posterior estimates.
+
+
+## EDA
+```{r}
+# packages being used
+library(tidyverse)
+library(GGally)
+library(corrplot)
+library(dplyr)
+```
+
+We notice that, our contracted salary(X2025.26 to X2030.31) are treated to be 
+character instead of numeric because of the extra dollar sign($). We must remove 
+the sign and set these to numeric for later analysis.
+
+```{r}
+result <- result %>%
+  mutate(across(starts_with("X20"), ~ as.numeric(gsub("\\$", "", .x))))
+class(result$X2025.26)
+```
+
+We also need to check whether there is any NA values for our response variable, if NA exists we would need to drop that row.
+```{r}
+result[is.na(result$X2025.26), ]
+```
+There exists one row which misses the value for our response variable, we decide to drop.
+```{r}
+result_final <- result[!is.na(result$X2025.26), ]
+dim(result_final)
+```
+
+```{r}
+# Distribution of our response variable: Salary
+ggplot(result_final, aes(x = X2025.26)) + geom_histogram(bins = 30) + labs(title = "Contracted Salary Distribution(2025-2026)")
+```
+We notice that the distribution of the contracted salary(X2025.26) is heavily right-skewed.
+A log transformation is necessary in order to standardize the variable.
+```{r}
+result_final$log_salary_2025.26 <- log(result_final$X2025.26)
+ggplot(result_final, aes(x = log_salary_2025.26)) + geom_histogram(bins = 30) + labs(title = "Log Salary Distribution")
+```
+
 
