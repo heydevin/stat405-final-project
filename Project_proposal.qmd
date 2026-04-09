@@ -50,14 +50,6 @@ head(Spotify_Tracks)
 
 To answer our question regarding the impact of player's performance metrics on salaries, we will construct a Bayesian regression model, which is likely a naive model. We will choose the expected contract salary as the response variable, and use players on-court metrics (e.g., True Shooting Percentage) to do inferences. Then we will take another approach to build a complex model, likely a Bayesian hierarchical model, to consider some additional factors, such as grouping the players by their listed positions (e.g., Guards, Centers).
 
-<<<<<<< HEAD
-TODO:
-specify the prior distribution.
-
-=======
--   Since we do not have strong prior knowledge regarding the exact relationship between TS% and salary, so we will likely assign weakly informative priors for the models, and allow the data to dominate the posterior distribution.
->>>>>>> 694c887e565fa239307469318c82a61076578a3b
-
 We can compute the posterior of the naive model using SNIS algorithm coded in R and MCMC algorithm implemented in Stan, compare these two methods and analyze the output. As well as doing plot analysis(e.g. plotting the true salaries against the 95% posterior predictive intervals), we can identify specific players whose market compensation significantly deviates from their statistically expected value.
 
 ### Short plans:

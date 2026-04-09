@@ -1,0 +1,23 @@
+---
+title: "Project Draft"
+format: html
+---
+
+```{r}
+result <- merge(NBA_Player_Stats, NBA_Player_Contracts, by.x = "NAME", by.y = "Player")
+head(result)
+```
+
+We decided to do Bayesian Inference on this question: Can we use the posterior predictive distribution to identify players who are significantly overpaid or underpaid relative to their market value?
+
+First, we merged the two datasets we found into one dataset. Then do EDA on the dataset, to explore the relationships between variables.
+
+The two methods we decided to use are:
+
+1.  Using stan to build a Bayesian linear regression model.
+
+    Before building the model, we will do variable selection based off the definition of the variables, and using methods like VIFs, forward model selection to choose the appropriate variables for the model. Then we will use the model to do stan, choosing the appropriate prior and posterior for the variables, and do posterior predictive distribution to identify players who are significantly overpaid or underpaid relative to their market value.
+
+2.  MCMC Metropolis-Hastings
+
+    We decided to do something related to MH algorithm.
