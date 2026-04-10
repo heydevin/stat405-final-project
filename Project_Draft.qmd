@@ -140,3 +140,11 @@ ols_fit <- lm(log(Salary) ~ USG. + TO. + TS. + PpG + RpG + ApG + SpG + BpG,
               data = df)
 vif(ols_fit)
 ```
+We notice that, for the heat map, there's no correlation coefficient greater than $0.8$, which means that all the variables at this stage are not considered to be highly correlated to each other. So we decide not to drop any of them.
+
+Note that for our VIF values, there exists one VIF value of $5.983835$(`PpG`) which is normally considered to be a concerning threshold that requires further investigation since this variable could potentially affecting coefficient estimates. Since `PpG` represents points per game, which means higher `PpG` surely results in higher `Salary`. But here we decide not to drop this column, since this VIF value is not extremely high(less than 10), and this variable acts like a key factor to consider for our research question.
+
+
+
+
+
