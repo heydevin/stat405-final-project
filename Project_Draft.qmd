@@ -75,19 +75,12 @@ two models - one with prior less information, one prior information
 
 linear regression
 
-```{r}
-
-NBA_Player_Stats_clean <- result[, c("NAME", "TEAM", "CUR", "POS", "AGE", "GP", "MpG", "USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG","X2025.26")]
-head(NBA_Player_Stats_clean)
-cor_matrix <- cor(NBA_Player_Stats_clean[, sapply(NBA_Player_Stats_clean, is.numeric)], 
-                  use = "complete.obs")
-corrplot(cor_matrix, method = "color")
-```
-
-```{r}
+```{r, warning=FALSE, message=FALSE}
 library(tidyverse)
 library(GGally)
-library(car)
+
+NBA_Player_Stats_clean <- result[, c("NAME", "TEAM", "CUR", "POS", "AGE", "GP", "MpG", "USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG","X2025.26")]
+# head(NBA_Player_Stats_clean)
 
 df <- NBA_Player_Stats_clean 
 df <- rename(df, Salary = X2025.26)
@@ -114,7 +107,7 @@ ggplot(df, aes(x = POS, y = log(Salary))) +
   labs(title = "log(Salary) by position")
 ```
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 pred_vars <- c("USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG")
 
 # Histogram
@@ -138,7 +131,7 @@ df %>%
   labs(title = "Predictors vs log(Salary)")
 ```
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 # Correlation Plot / Matrix
 cor_mat <- cor(df[, pred_vars], use = "complete.obs")
 corrplot::corrplot(cor_mat, method = "color", addCoef.col = "black", 
