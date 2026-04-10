@@ -95,7 +95,7 @@ p2
 # Position
 ggplot(df, aes(x = POS, y = log(Salary))) +
   geom_boxplot() + 
-  labs(title = "Scatter plot of Log(Salary) by position")
+  labs(title = "Side by side boxplot of Log(Salary) by position")
 ```
 We notice that the distribution of the contracted salary(X2025.26) is heavily right-skewed. A log transformation is necessary in order to standardize the variable.
 
@@ -145,6 +145,21 @@ We notice that, for the heat map, there's no correlation coefficient greater tha
 Note that for our VIF values, there exists one VIF value of $5.983835$(`PpG`) which is normally considered to be a concerning threshold that requires further investigation since this variable could potentially affecting coefficient estimates. Since `PpG` represents points per game, which means higher `PpG` surely results in higher `Salary`. But here we decide not to drop this column, since this VIF value is not extremely high(less than 10), and this variable acts like a key factor to consider for our research question.
 
 
+USG.      TO.      TS.      PpG      RpG      ApG      SpG      BpG 
+## Model 1:
+Our naive model is linear regression.
+$$\log(salary)_i \sim \mathcal{N}(\alpha + \beta_1 \cdot USG_i + \beta_2\cdot TO_i\cdot + \beta_3\cdot TS_i + \beta_4 \cdot PpG + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i, σ^2)$$
 
+And we have $$\alpha \sim \mathcal{N} (16, 2) \\ \beta_1 \sim \mathcal{N} (), \\ \beta_2 \sim \mathcal{N} (), \\  \beta_3 \sim \mathcal{N} (), \\ \beta_4 \sim \mathcal{N} (), \\ \beta_5 \sim \mathcal{N} (), \\ \beta_6 \sim \mathcal{N} (), \\ \beta_7 \sim \mathcal{N} (), \\ \beta_8 \sim \mathcal{N} (), \\ \sigma \sim ()$$. 
+
+
+
+
+## Model 2:
+Our complex model is Hierarchical Linear Regression (layered by positions)
+$$\log(salary)_i \sim \mathcal{N}(\alpha_j + \beta_1 \cdot USG_i + \beta_2\cdot TO_i\cdot + \beta_3\cdot TS_i + \beta_4 \cdot PpG + 
+\beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i, σ^2)$$
+
+And we have $$\alpha_j \sim \mathcal{N} (\mu_a, \tau^2) \\ \beta_1 \sim \mathcal{N} (), \\ \beta_2 \sim \mathcal{N} (), \\  \beta_3 \sim \mathcal{N} (), \\ \beta_4 \sim \mathcal{N} (), \\ \beta_5 \sim \mathcal{N} (), \\ \beta_6 \sim \mathcal{N} (), \\ \beta_7 \sim \mathcal{N} (), \\ \beta_8 \sim \mathcal{N} () \\ \tau \sim ()$$.
 
 
