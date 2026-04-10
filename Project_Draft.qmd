@@ -26,19 +26,19 @@ The two methods we decided to use are:
 
     We decided to do something related to MH algorithm. We implemented the Metropolis-Hastings algorithm manually to sample from the posterior distribution. Then, compare the MCMC result with the Stan method result. This would determine whether or not those two methods produce consistent posterior estimates.
 
-
 ## EDA
+
 ```{r}
 # packages being used
 library(tidyverse)
-library(GGally)
+# library(GGally)
 library(corrplot)
 library(dplyr)
+
+
 ```
 
-We notice that, our contracted salary(X2025.26 to X2030.31) are treated to be 
-character instead of numeric because of the extra dollar sign($). We must remove 
-the sign and set these to numeric for later analysis.
+We notice that, our contracted salary(X2025.26 to X2030.31) are treated to be character instead of numeric because of the extra dollar sign(\$). We must remove the sign and set these to numeric for later analysis.
 
 ```{r}
 result <- result %>%
@@ -47,10 +47,13 @@ class(result$X2025.26)
 ```
 
 We also need to check whether there is any NA values for our response variable, if NA exists we would need to drop that row.
+
 ```{r}
 result[is.na(result$X2025.26), ]
 ```
+
 There exists one row which misses the value for our response variable, we decide to drop.
+
 ```{r}
 result_final <- result[!is.na(result$X2025.26), ]
 dim(result_final)
@@ -60,11 +63,95 @@ dim(result_final)
 # Distribution of our response variable: Salary
 ggplot(result_final, aes(x = X2025.26)) + geom_histogram(bins = 30) + labs(title = "Contracted Salary Distribution(2025-2026)")
 ```
-We notice that the distribution of the contracted salary(X2025.26) is heavily right-skewed.
-A log transformation is necessary in order to standardize the variable.
+
+We notice that the distribution of the contracted salary(X2025.26) is heavily right-skewed. A log transformation is necessary in order to standardize the variable.
+
 ```{r}
 result_final$log_salary_2025.26 <- log(result_final$X2025.26)
 ggplot(result_final, aes(x = log_salary_2025.26)) + geom_histogram(bins = 30) + labs(title = "Log Salary Distribution")
 ```
 
+two models - one with prior less information, one prior information
 
+linear regression
+
+```{r}
+
+NBA_Player_Stats_clean <- result[, c("NAME", "TEAM", "CUR", "POS", "AGE", "GP", "MpG", "USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG","X2025.26")]
+head(NBA_Player_Stats_clean)
+cor_matrix <- cor(NBA_Player_Stats_clean[, sapply(NBA_Player_Stats_clean, is.numeric)], 
+                  use = "complete.obs")
+corrplot(cor_matrix, method = "color")
+```
+
+```{r}
+library(tidyverse)
+library(GGally)
+library(car)
+
+df <- NBA_Player_Stats_clean 
+df <- rename(df, Salary = X2025.26)
+
+# Original Salary
+p1 <- ggplot(df, aes(x = Salary)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "steelblue") +
+  labs(title = "Salary distribution (raw)")
+
+p1
+
+# Log Salary
+p2 <- ggplot(df, aes(x = log(Salary))) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "coral") +
+  labs(title = "log(Salary) distribution")
+
+p2
+
+# Position
+ggplot(df, aes(x = POS, y = log(Salary))) +
+  geom_boxplot() +
+  labs(title = "log(Salary) by position")
+```
+
+```{r}
+pred_vars <- c("USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG")
+
+# Histogram
+df %>%
+  select(all_of(pred_vars)) %>%
+  pivot_longer(everything()) %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 25) +
+  facet_wrap(~name, scales = "free") +
+  labs(title = "Predictor distributions")
+
+# Variables vs log(Salary) Scatterplot
+df %>%
+  mutate(log_salary = log(Salary)) %>%
+  select(log_salary, all_of(pred_vars)) %>%
+  pivot_longer(-log_salary) %>%
+  ggplot(aes(x = value, y = log_salary)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  facet_wrap(~name, scales = "free_x") +
+  labs(title = "Predictors vs log(Salary)")
+```
+
+```{r}
+# Correlation Plot / Matrix
+cor_mat <- cor(df[, pred_vars], use = "complete.obs")
+corrplot::corrplot(cor_mat, method = "color", addCoef.col = "black", 
+                   number.cex = 0.7, tl.cex = 0.8)
+
+# Pairs plot（log Salary）
+df %>%
+  mutate(log_salary = log(Salary)) %>%
+  select(log_salary, all_of(pred_vars)) %>%
+  ggpairs()
+
+# VIF
+ols_fit <- lm(log(Salary) ~ USG. + TO. + TS. + PpG + RpG + ApG + SpG + BpG,
+              data = df)
+vif(ols_fit)
+```
