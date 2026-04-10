@@ -59,17 +59,8 @@ result_final <- result[!is.na(result$X2025.26), ]
 dim(result_final)
 ```
 
-```{r}
-# Distribution of our response variable: Salary
-ggplot(result_final, aes(x = X2025.26)) + geom_histogram(bins = 30) + labs(title = "Contracted Salary Distribution(2025-2026)")
-```
 
-We notice that the distribution of the contracted salary(X2025.26) is heavily right-skewed. A log transformation is necessary in order to standardize the variable.
 
-```{r}
-result_final$log_salary_2025.26 <- log(result_final$X2025.26)
-ggplot(result_final, aes(x = log_salary_2025.26)) + geom_histogram(bins = 30) + labs(title = "Log Salary Distribution")
-```
 
 two models - one with prior less information, one prior information
 
@@ -89,7 +80,7 @@ df <- rename(df, Salary = X2025.26)
 p1 <- ggplot(df, aes(x = Salary)) +
   geom_histogram(aes(y = after_stat(density)), bins = 30) +
   geom_density(color = "steelblue") +
-  labs(title = "Salary distribution (raw)")
+  labs(title = "Contracted Salary Distribution(2025-2026)")
 
 p1
 
@@ -97,15 +88,16 @@ p1
 p2 <- ggplot(df, aes(x = log(Salary))) +
   geom_histogram(aes(y = after_stat(density)), bins = 30) +
   geom_density(color = "coral") +
-  labs(title = "log(Salary) distribution")
+  labs(title = "Log Salary Distribution(2025-2026)")
 
 p2
 
 # Position
 ggplot(df, aes(x = POS, y = log(Salary))) +
-  geom_boxplot() +
-  labs(title = "log(Salary) by position")
+  geom_boxplot() + 
+  labs(title = "Scatter plot of Log(Salary) by position")
 ```
+We notice that the distribution of the contracted salary(X2025.26) is heavily right-skewed. A log transformation is necessary in order to standardize the variable.
 
 ```{r, warning=FALSE, message=FALSE}
 pred_vars <- c("USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG")
