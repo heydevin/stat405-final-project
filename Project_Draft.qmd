@@ -26,6 +26,75 @@ The two methods we decided to use are:
 
     We decided to do something related to MH algorithm. We implemented the Metropolis-Hastings algorithm manually to sample from the posterior distribution. Then, compare the MCMC result with the Stan method result. This would determine whether or not those two methods produce consistent posterior estimates.
 
+## Data Cleaning (Rename + Outliers)
+
+```{r}
+NBA_Player_Stats_clean <- result[, c("NAME", "TEAM", "CUR", "POS", "AGE", "GP", "MpG", "USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG","X2025.26")]
+# head(NBA_Player_Stats_clean)
+
+df <- NBA_Player_Stats_clean 
+df <- rename(df, Salary = X2025.26) # rename salary
+names(df) <- sub("\\..*", "", names(df)) # remove dots in names
+head(df)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# packages being used
+library(tidyverse)
+library(corrplot)
+library(dplyr)
+
+# Original Salary
+p1 <- ggplot(df, aes(x = Salary)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "steelblue") +
+  labs(title = "Contracted Salary Distribution(2025-2026)")
+
+p1
+
+# Log Salary
+p2 <- ggplot(df, aes(x = log(Salary))) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "coral") +
+  labs(title = "Log Salary Distribution(2025-2026)")
+
+p2
+
+# Position
+ggplot(df, aes(x = POS, y = log(Salary))) +
+  geom_boxplot() + 
+  labs(title = "Side by side boxplot of Log(Salary) by position")
+```
+
+```{r}
+# remove outliers
+df_clean <- df %>%
+  group_by(POS) %>%
+  mutate(
+    Q1 = quantile(log(Salary), 0.25, na.rm = TRUE),
+    Q3 = quantile(log(Salary), 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR
+  ) %>%
+  filter(!(POS %in% c("F", "G") & log(Salary) < lower)) %>%
+  select(-Q1, -Q3, -IQR, -lower) %>%
+  ungroup()
+dim(df)
+dim(df_clean)
+
+# remove na
+# df_clean[is.na(df_clean$Salary), ]
+df_clean <- df_clean[!is.na(df_clean$Salary), ]
+dim(df_clean)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Position boxplot after data cleaning
+ggplot(df_clean, aes(x = POS, y = log(Salary))) +
+  geom_boxplot() + 
+  labs(title = "Side by side boxplot of Log(Salary) by position")
+```
+
 ## EDA
 
 ```{r}
@@ -58,9 +127,6 @@ There exists one row which misses the value for our response variable, we decide
 result_final <- result[!is.na(result$X2025.26), ]
 dim(result_final)
 ```
-
-
-
 
 two models - one with prior less information, one prior information
 
@@ -97,6 +163,7 @@ ggplot(df, aes(x = POS, y = log(Salary))) +
   geom_boxplot() + 
   labs(title = "Side by side boxplot of Log(Salary) by position")
 ```
+
 We notice that the distribution of the contracted salary(X2025.26) is heavily right-skewed. A log transformation is necessary in order to standardize the variable.
 
 ```{r, warning=FALSE, message=FALSE}
@@ -140,26 +207,18 @@ ols_fit <- lm(log(Salary) ~ USG. + TO. + TS. + PpG + RpG + ApG + SpG + BpG,
               data = df)
 vif(ols_fit)
 ```
+
 We notice that, for the heat map, there's no correlation coefficient greater than $0.8$, which means that all the variables at this stage are not considered to be highly correlated to each other. So we decide not to drop any of them.
 
 Note that for our VIF values, there exists one VIF value of $5.983835$(`PpG`) which is normally considered to be a concerning threshold that requires further investigation since this variable could potentially affecting coefficient estimates. Since `PpG` represents points per game, which means higher `PpG` surely results in higher `Salary`. But here we decide not to drop this column, since this VIF value is not extremely high(less than 10), and this variable acts like a key factor to consider for our research question.
 
+USG. TO. TS. PpG RpG ApG SpG BpG \## Model 1: Our naive model is linear regression. $$\log(salary)_i \sim \mathcal{N}(\alpha + \beta_1 \cdot USG_i + \beta_2\cdot TO_i\cdot + \beta_3\cdot TS_i + \beta_4 \cdot PpG + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i, σ^2)$$
 
-USG.      TO.      TS.      PpG      RpG      ApG      SpG      BpG 
-## Model 1:
-Our naive model is linear regression.
-$$\log(salary)_i \sim \mathcal{N}(\alpha + \beta_1 \cdot USG_i + \beta_2\cdot TO_i\cdot + \beta_3\cdot TS_i + \beta_4 \cdot PpG + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i, σ^2)$$
-
-And we have $$\alpha \sim \mathcal{N} (16, 2) \\ \beta_1 \sim \mathcal{N} (), \\ \beta_2 \sim \mathcal{N} (), \\  \beta_3 \sim \mathcal{N} (), \\ \beta_4 \sim \mathcal{N} (), \\ \beta_5 \sim \mathcal{N} (), \\ \beta_6 \sim \mathcal{N} (), \\ \beta_7 \sim \mathcal{N} (), \\ \beta_8 \sim \mathcal{N} (), \\ \sigma \sim ()$$. 
-
-
-
+And we have $$\alpha \sim \mathcal{N} (16, 2) \\ \beta_1 \sim \mathcal{N} (), \\ \beta_2 \sim \mathcal{N} (), \\  \beta_3 \sim \mathcal{N} (), \\ \beta_4 \sim \mathcal{N} (), \\ \beta_5 \sim \mathcal{N} (), \\ \beta_6 \sim \mathcal{N} (), \\ \beta_7 \sim \mathcal{N} (), \\ \beta_8 \sim \mathcal{N} (), \\ \sigma \sim ()$$.
 
 ## Model 2:
-Our complex model is Hierarchical Linear Regression (layered by positions)
-$$\log(salary)_i \sim \mathcal{N}(\alpha_j + \beta_1 \cdot USG_i + \beta_2\cdot TO_i\cdot + \beta_3\cdot TS_i + \beta_4 \cdot PpG + 
+
+Our complex model is Hierarchical Linear Regression (layered by positions) $$\log(salary)_i \sim \mathcal{N}(\alpha_j + \beta_1 \cdot USG_i + \beta_2\cdot TO_i\cdot + \beta_3\cdot TS_i + \beta_4 \cdot PpG + 
 \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i, σ^2)$$
 
 And we have $$\alpha_j \sim \mathcal{N} (\mu_a, \tau^2) \\ \beta_1 \sim \mathcal{N} (), \\ \beta_2 \sim \mathcal{N} (), \\  \beta_3 \sim \mathcal{N} (), \\ \beta_4 \sim \mathcal{N} (), \\ \beta_5 \sim \mathcal{N} (), \\ \beta_6 \sim \mathcal{N} (), \\ \beta_7 \sim \mathcal{N} (), \\ \beta_8 \sim \mathcal{N} () \\ \tau \sim ()$$.
-
-

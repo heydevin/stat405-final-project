@@ -1,0 +1,198 @@
+---
+title: "Project Draft"
+format: html
+---
+
+## Data Overview
+
+```{r, warning=FALSE, message=FALSE}
+# packages being used
+library(tidyverse)
+library(corrplot)
+library(dplyr)
+library(GGally)
+library(car)
+
+NBA_Player_Stats <- read.csv("Datasets/2025-2026 NBA Player Stats - NBAstuffer.csv")
+NBA_Player_Stats <- NBA_Player_Stats[, -1]
+NBA_Player_Contracts <- read.csv("Datasets/2025-26 NBA Player Contracts.csv")
+result <- merge(NBA_Player_Stats, NBA_Player_Contracts, by.x = "NAME", by.y = "Player")
+head(result)
+dim(result)
+```
+
+We decided to do Bayesian Inference on this question: Can we use the posterior predictive distribution to identify players who are significantly overpaid or underpaid relative to their market value?
+
+First, we merged the two datasets we found into one dataset. Then we perform EDA on the dataset, explore the distribution of variables to find if there exists patterns, outliers, and we would also want to find if there's any relationship between variables which would influence our later on analysis. Data cleaning is also conducted at this step as well by dropping some columns that are unrelated to our research question and removing the outliers we find.
+
+The two methods we decided to use are:
+
+1.  Using stan to build a Bayesian linear regression model.
+
+    Before building the model, we will do variable selection based off the definition of the variables, and using methods like VIFs, forward model selection to choose the appropriate variables for the model. Then we will use the model to do stan, choosing the appropriate prior and posterior for the variables, and do posterior predictive distribution to identify players who are significantly overpaid or underpaid relative to their market value.
+
+2.  MCMC Metropolis-Hastings
+
+    We decided to do something related to MH algorithm. We implemented the Metropolis-Hastings algorithm manually to sample from the posterior distribution. Then, compare the MCMC result with the Stan method result. This allows us to determine whether or not those two methods produce consistent posterior estimates.
+
+## Data Cleaning
+
+We notice that our contracted salary columns (X2025.26 to X2030.31) are treated as character instead of numeric because of the extra dollar sign (\$). We must remove the sign and set these to numeric for later analysis.
+
+```{r}
+result <- result %>%
+  mutate(across(starts_with("X20"), ~ as.numeric(gsub("\\$", "", .x))))
+class(result$X2025.26)
+```
+
+We also need to check whether there are any NA values for our response variable; if NA exists we would need to drop that row.
+
+```{r}
+result[is.na(result$X2025.26), ]
+```
+
+There exists one row which misses the value for our response variable, we drop this observation.
+
+```{r}
+result_final <- result[!is.na(result$X2025.26), ]
+dim(result_final)
+```
+
+Next, we select the relevant columns for our research question and rename them for clarity.
+
+```{r}
+NBA_Player_Stats_clean <- result_final[, c("NAME", "TEAM", "CUR", "POS", "AGE", "GP", "MpG", "USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG", "X2025.26")]
+
+df <- NBA_Player_Stats_clean
+df <- rename(df, Salary = X2025.26)   # rename salary
+names(df) <- sub("\\..*", "", names(df))  # remove dots in names
+head(df)
+```
+
+## EDA
+
+### Salary Distribution
+
+```{r, warning=FALSE, message=FALSE}
+# Original Salary
+p1 <- ggplot(df, aes(x = Salary)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "steelblue") +
+  labs(title = "Contracted Salary Distribution (2025-2026)")
+
+p1
+
+# Log Salary
+p2 <- ggplot(df, aes(x = log(Salary))) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "coral") +
+  labs(title = "Log Salary Distribution (2025-2026)")
+
+p2
+```
+
+We notice that the distribution of the contracted salary (X2025.26) is heavily right-skewed. A log transformation is necessary in order to standardize the variable.
+
+### Salary by Position
+
+```{r, warning=FALSE, message=FALSE}
+# Position
+ggplot(df, aes(x = POS, y = log(Salary))) +
+  geom_boxplot() +
+  labs(title = "Side by side boxplot of Log(Salary) by position")
+```
+
+### Outliers Removal
+
+```{r}
+# remove outliers
+df <- df %>%
+  group_by(POS) %>%
+  mutate(
+    Q1 = quantile(log(Salary), 0.25, na.rm = TRUE),
+    Q3 = quantile(log(Salary), 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR
+  ) %>%
+  filter(!(POS %in% c("F", "G") & log(Salary) < lower)) %>%
+  select(-Q1, -Q3, -IQR, -lower) %>%
+  ungroup()
+dim(df)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Position boxplot after data cleaning
+ggplot(df, aes(x = POS, y = log(Salary))) +
+  geom_boxplot() +
+  labs(title = "Side by side boxplot of Log(Salary) by position (after cleaning)")
+```
+
+### Predictor Distributions and Relationships with Log(Salary)
+
+```{r, warning=FALSE, message=FALSE}
+pred_vars <- c("USG", "TO", "TS", "PpG", "RpG", "ApG", "SpG", "BpG")
+
+# Histogram
+df %>%
+  select(all_of(pred_vars)) %>%
+  pivot_longer(everything()) %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 25) +
+  facet_wrap(~name, scales = "free") +
+  labs(title = "Predictor distributions")
+
+# Variables vs log(Salary) Scatterplot
+df %>%
+  mutate(log_salary = log(Salary)) %>%
+  select(log_salary, all_of(pred_vars)) %>%
+  pivot_longer(-log_salary) %>%
+  ggplot(aes(x = value, y = log_salary)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  facet_wrap(~name, scales = "free_x") +
+  labs(title = "Predictors vs log(Salary)")
+```
+
+### Correlation and Multicollinearity Check
+
+```{r, warning=FALSE, message=FALSE}
+# Correlation Plot / Matrix
+cor_mat <- cor(df[, pred_vars], use = "complete.obs")
+corrplot::corrplot(cor_mat, method = "color", addCoef.col = "black",
+                   number.cex = 0.7, tl.cex = 0.8)
+
+# Pairs plot (log Salary)
+df %>%
+  mutate(log_salary = log(Salary)) %>%
+  select(log_salary, all_of(pred_vars)) %>%
+  ggpairs()
+
+# VIF
+ols_fit <- lm(log(Salary) ~ USG + TO + TS + PpG + RpG + ApG + SpG + BpG,
+              data = df)
+vif(ols_fit)
+```
+
+We notice that for the heat map, there's no correlation coefficient greater than $0.8$, which means that all the variables at this stage are not considered to be highly correlated to each other. So we decide not to drop any of them.
+
+Note that for our VIF values, there exists one VIF value of $6.016229$ (`PpG`) which is normally considered to be a concerning threshold that requires further investigation since this variable could potentially be affecting coefficient estimates. Since `PpG` represents points per game, higher `PpG` surely results in higher `Salary`. However, we decide not to drop this column, since this VIF value is not extremely high (less than 10), and this variable acts as a key factor to consider for our research question.
+
+## Model 1: Bayesian Linear Regression
+
+Our naive model is linear regression.
+
+$$\log(salary)_i \sim \mathcal{N}(\alpha + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)$$
+
+And we have
+
+$$\alpha \sim \mathcal{N}(16, 2) \\ \beta_1 \sim \mathcal{N}(), \\ \beta_2 \sim \mathcal{N}(), \\ \beta_3 \sim \mathcal{N}(), \\ \beta_4 \sim \mathcal{N}(), \\ \beta_5 \sim \mathcal{N}(), \\ \beta_6 \sim \mathcal{N}(), \\ \beta_7 \sim \mathcal{N}(), \\ \beta_8 \sim \mathcal{N}(), \\ \sigma \sim ()$$
+
+## Model 2: Hierarchical Bayesian Linear Regression
+
+Our complex model is Hierarchical Linear Regression with position-specific intercepts.
+
+$$\log(salary)_i \sim \mathcal{N}(\alpha_j + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)$$
+
+And we have
+
+$$\alpha_j \sim \mathcal{N}(\mu_a, \tau^2) \\ \beta_1 \sim \mathcal{N}(), \\ \beta_2 \sim \mathcal{N}(), \\ \beta_3 \sim \mathcal{N}(), \\ \beta_4 \sim \mathcal{N}(), \\ \beta_5 \sim \mathcal{N}(), \\ \beta_6 \sim \mathcal{N}(), \\ \beta_7 \sim \mathcal{N}(), \\ \beta_8 \sim \mathcal{N}(), \\ \tau \sim ()$$
