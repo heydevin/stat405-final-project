@@ -177,7 +177,7 @@ We notice that for the heat map, there's no correlation coefficient greater than
 
 Note that for our VIF values, there exists one VIF value of $6.016229$ (`PpG`) which is normally considered to be a concerning threshold that requires further investigation since this variable could potentially be affecting coefficient estimates. Since `PpG` represents points per game, higher `PpG` surely results in higher `Salary`. However, we decide not to drop this column, since this VIF value is not extremely high (less than 10), and this variable acts as a key factor to consider for our research question.
 
-According to the distributions of our explanatory variables, we notice that those variables all have different ranges. In order to do later on analysis, we need to standardize our 8 predictors to make our prior specifications become consistent. And without standardization, coefficients are not comparable.
+According to the distributions of our explanatory variables, we notice that those variables all have different ranges. In order to do later on analysis, we need to standardize our 8 predictors to make our prior specifications become consistent. Without standardization, coefficients are not comparable. In conclusion, Standardization ensures that the same prior is equally informative for all predictors regardless of their original units, and the posterior coefficients can be directly compared to assess the relative importance of each stat.
 ```{r}
 df <- df %>%
   mutate(
@@ -202,14 +202,20 @@ $$\log(salary)_i \sim \mathcal{N}(\alpha + \beta_1 \cdot USG_i + \beta_2\cdot TO
 
 And we have
 
-$$\alpha \sim \mathcal{N}(16, 2) \\ \beta_1 \sim \mathcal{N}(), \\ \beta_2 \sim \mathcal{N}(), \\ \beta_3 \sim \mathcal{N}(), \\ \beta_4 \sim \mathcal{N}(), \\ \beta_5 \sim \mathcal{N}(), \\ \beta_6 \sim \mathcal{N}(), \\ \beta_7 \sim \mathcal{N}(), \\ \beta_8 \sim \mathcal{N}(), \\ \sigma \sim ()$$
+$$\alpha \sim \mathcal{N}(16, 2) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)$$
+```{r}
+## for checking
+ols_fit <- lm(log(Salary) ~ USG_s + TO_s + TS_s + PpG_s + 
+                             RpG_s + ApG_s + SpG_s + BpG_s, data = df)
+summary(ols_fit)$sigma
+```
 
 ## Model 2: Hierarchical Bayesian Linear Regression
 
 Our complex model is Hierarchical Linear Regression with position-specific intercepts.
 
-$$\log(salary)_i \sim \mathcal{N}(\alpha_j + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)$$
+$$\log(salary)_i \sim \mathcal{N}(\alpha_{j_[i]} + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)$$
+Where $j[i]$ represents the i-th basketball player's position, $j = 1,2,...,7$, that we have different 7 positions in total.
 
-And we have
 
-$$\alpha_j \sim \mathcal{N}(\mu_a, \tau^2) \\ \beta_1 \sim \mathcal{N}(), \\ \beta_2 \sim \mathcal{N}(), \\ \beta_3 \sim \mathcal{N}(), \\ \beta_4 \sim \mathcal{N}(), \\ \beta_5 \sim \mathcal{N}(), \\ \beta_6 \sim \mathcal{N}(), \\ \beta_7 \sim \mathcal{N}(), \\ \beta_8 \sim \mathcal{N}(), \\ \tau \sim ()$$
+$$\alpha_j \sim \mathcal{N}(\mu_\alpha, \tau^2), \ j = 1,2,...,7 \\ \mu_\alpha \sim \mathcal{N}(16,2) \\ \tau \sim \text{Half-Normal}(0, 1) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)$$
