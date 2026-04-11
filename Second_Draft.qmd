@@ -472,15 +472,17 @@ ggplot(plot_df, aes(x = player_idx)) +
     plot.subtitle     = element_text(colour = "grey40", size = 10)
   )
 ```
+
 ## Variational Inference
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 # using model1.stan for VI
 fit_m1_vi <- vb(
   stan_model("model1.stan"),
   data      = stan_data_m1,
   algorithm = "meanfield",
-  seed      = 42
+  seed      = 42,
+  refresh = 0
 )
 
 # using model2.stan for VI
@@ -488,11 +490,14 @@ fit_m2_vi <- vb(
   stan_model("model2.stan"),
   data      = stan_data_m2,
   algorithm = "meanfield",
-  seed      = 42
+  seed      = 42,
+  refresh = 0
 )
 ```
 
-```{r}
+### Model 1 HMC and VI Comparison plot
+
+```{r, warning=FALSE, message=FALSE}
 library(bayesplot)
 library(tidyverse)
 
@@ -564,7 +569,10 @@ comparison_df %>%
   theme_bw() +
   theme(legend.position = "top")
 ```
-```{r}
+
+### Model 2 HMC and VI Comparison plot
+
+```{r, warning=FALSE, message=FALSE}
 
 # extract posterior samples
 pars_beta  <- paste0("beta[",  1:8, "]")
@@ -706,4 +714,3 @@ comparison_m2 %>%
     axis.text.x     = element_text(angle = 45, hjust = 1)
   )
 ```
-
