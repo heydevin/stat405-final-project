@@ -220,9 +220,9 @@ $$\log(salary)_i \sim \mathcal{N}(\alpha_{j_[i]} + \beta_1 \cdot USG_i + \beta_2
 
 $$\alpha_j \sim \mathcal{N}(\mu_\alpha, \tau^2), \ j = 1,2,...,7 \\ \mu_\alpha \sim \mathcal{N}(16,2) \\ \tau \sim \text{Half-Normal}(0, 1) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)$$
 
-## Run Posterior Using Stan and R Code
+## Run Posterior Using Stan
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 library(rstan)
 library(loo)
 
@@ -231,13 +231,13 @@ rstan_options(auto_write = TRUE)
 
 pred_vars <- c("USG", "TO", "TS", "PpG", "RpG", "ApG", "SpG", "BpG")
 
-# 标准化预测变量（重要！让 beta ~ N(0,1) 真正 weakly informative）
+# standardize 
 X_raw <- df[, pred_vars]
-X_scaled <- scale(X_raw)           # 保存 center / scale 属性，预测时还原用
+X_scaled <- scale(X_raw)
 
 y <- log(df$Salary)
 
-# position index（整数编码）
+# position index
 pos_levels <- levels(factor(df$POS))
 pos_id     <- as.integer(factor(df$POS, levels = pos_levels))
 J          <- length(pos_levels)
@@ -247,7 +247,7 @@ K          <- length(pred_vars)
 cat("N =", N, "| K =", K, "| J =", J, "\n")
 cat("Positions:", pos_levels, "\n")
 
-# ── 1. Model 1：Bayesian Linear Regression ────────────────────
+# model 1 data
 stan_data_m1 <- list(
   N = N,
   K = K,
@@ -262,12 +262,13 @@ fit_m1 <- stan(
   warmup  = 2000,
   chains  = 4,
   seed    = 42,
-  control = list(adapt_delta = 0.95)
+  control = list(adapt_delta = 0.95),
+  refresh = 0
 )
 
 print(fit_m1, pars = c("alpha", "beta", "sigma"), probs = c(0.025, 0.5, 0.975))
 
-# ── 2. Model 2：Hierarchical Bayesian Linear Regression ───────
+# model 2 data
 stan_data_m2 <- list(
   N      = N,
   K      = K,
@@ -284,178 +285,104 @@ fit_m2 <- stan(
   warmup  = 2000,
   chains  = 4,
   seed    = 42,
-  control = list(adapt_delta = 0.95)
+  control = list(adapt_delta = 0.95),
+  refresh = 0
 )
 
 print(fit_m2, pars = c("mu_a", "tau", "alpha", "beta", "sigma"),
       probs = c(0.025, 0.5, 0.975))
 
-# ── 3. 收敛诊断 ───────────────────────────────────────────────
-# R-hat 应全部 < 1.01，n_eff 应足够大
 stan_diag_m1 <- summary(fit_m1)$summary
 stan_diag_m2 <- summary(fit_m2)$summary
 
 cat("\nModel 1 - max R-hat:", max(stan_diag_m1[, "Rhat"], na.rm = TRUE), "\n")
 cat("Model 2 - max R-hat:", max(stan_diag_m2[, "Rhat"], na.rm = TRUE), "\n")
+```
 
-# ── 4. LOO-CV 比较两个模型 ────────────────────────────────────
+## LOO-CV for Result Comparison
+
+```{r, warning=FALSE, message=FALSE}
+# leave one out cross validation
 log_lik_m1 <- extract_log_lik(fit_m1, merge_chains = FALSE)
 log_lik_m2 <- extract_log_lik(fit_m2, merge_chains = FALSE)
 
 loo_m1 <- loo(log_lik_m1, r_eff = relative_eff(exp(log_lik_m1)))
 loo_m2 <- loo(log_lik_m2, r_eff = relative_eff(exp(log_lik_m2)))
 
-# print(loo_compare(loo_m1, loo_m2))
 cat("\nLoo compare:", loo_compare(loo_m1, loo_m2), "\n")
+```
 
-# ── 5. 后验预测：识别 overpaid / underpaid ────────────────────
-# 用 Model 2（更优模型）的 posterior predictive distribution
-y_rep_m2  <- extract(fit_m2, "y_rep")$y_rep   # shape: [draws, N]
-residuals <- extract(fit_m2, "residual")$residual
+## Posterior Predictive Distribution Results
 
-# 每个球员：后验预测均值 & 95% 区间（log scale）
-ppd_mean  <- apply(y_rep_m2, 2, mean)
-ppd_lower <- apply(y_rep_m2, 2, quantile, 0.025)
-ppd_upper <- apply(y_rep_m2, 2, quantile, 0.975)
+```{r, warning=FALSE, message=FALSE}
+# Model 1
+y_rep_model1  <- extract(fit_m1, "y_rep")$y_rep
 
-results <- data.frame(
+# posterior predictive distribution mean & 95% ci（log scale）
+ppd_model1_mean  <- apply(y_rep_model1, 2, mean)
+ppd_model1_lower <- apply(y_rep_model1, 2, quantile, 0.025)
+ppd_model1_upper <- apply(y_rep_model1, 2, quantile, 0.975)
+
+results_model1 <- data.frame(
   NAME          = df$NAME,
   POS           = df$POS,
   Actual_Salary = df$Salary,
   log_Salary    = y,
-  PPD_mean      = ppd_mean,
-  PPD_lower     = ppd_lower,
-  PPD_upper     = ppd_upper,
-  # 换回原始薪资尺度
-  Predicted_Salary = exp(ppd_mean),
-  Lower_Salary     = exp(ppd_lower),
-  Upper_Salary     = exp(ppd_upper)
+  PPD_mean      = ppd_model1_mean,
+  PPD_lower     = ppd_model1_lower,
+  PPD_upper     = ppd_model1_upper,
+  # change back to original salary
+  Predicted_Salary = exp(ppd_model1_mean),
+  Lower_Salary     = exp(ppd_model1_lower),
+  Upper_Salary     = exp(ppd_model1_upper)
 )
 
-# 判定：实际 log salary 超出 95% 后验预测区间
-results$Status <- "Fair"
-results$Status[results$log_Salary > results$PPD_upper] <- "Overpaid"
-results$Status[results$log_Salary < results$PPD_lower] <- "Underpaid"
+# overpaid / underpaid
+results_model1$Status <- "Fair"
+results_model1$Status[results_model1$log_Salary > results_model1$PPD_upper] <- "Overpaid"
+results_model1$Status[results_model1$log_Salary < results_model1$PPD_lower] <- "Underpaid"
 
 cat("\nOverpaid players:\n")
-print(results[results$Status == "Overpaid",
+print(results_model1[results_model1$Status == "Overpaid",
               c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
 
 cat("\nUnderpaid players:\n")
-print(results[results$Status == "Underpaid",
+print(results_model1[results_model1$Status == "Underpaid",
               c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
 
-```
 
-```{r}
-library(rstan)
-library(ggplot2)
-library(dplyr)
+# Model 2
+y_rep_model2  <- extract(fit_m2, "y_rep")$y_rep
 
-# ── 提取两个模型的 y_rep ──────────────────────────────────────
-y_rep_m1 <- extract(fit_m1, "y_rep")$y_rep   # shape: [8000, 531]
-y_rep_m2 <- extract(fit_m2, "y_rep")$y_rep   # shape: [8000, 531]
+# posterior predictive distribution mean & 95% ci（log scale）
+ppd_model2_mean  <- apply(y_rep_model2, 2, mean)
+ppd_model2_lower <- apply(y_rep_model2, 2, quantile, 0.025)
+ppd_model2_upper <- apply(y_rep_model2, 2, quantile, 0.975)
 
-# ── 计算每个球员的 PPD 均值和 95% CI ─────────────────────────
-ppd_summary <- data.frame(
+results_model2 <- data.frame(
   NAME          = df$NAME,
   POS           = df$POS,
-  Actual_logSalary = log(df$Salary),
-  Actual_Salary    = df$Salary,
-
-  # Model 1
-  M1_mean  = apply(y_rep_m1, 2, mean),
-  M1_lower = apply(y_rep_m1, 2, quantile, 0.025),
-  M1_upper = apply(y_rep_m1, 2, quantile, 0.975),
-
-  # Model 2
-  M2_mean  = apply(y_rep_m2, 2, mean),
-  M2_lower = apply(y_rep_m2, 2, quantile, 0.025),
-  M2_upper = apply(y_rep_m2, 2, quantile, 0.975)
+  Actual_Salary = df$Salary,
+  log_Salary    = y,
+  PPD_mean      = ppd_model2_mean,
+  PPD_lower     = ppd_model2_lower,
+  PPD_upper     = ppd_model2_upper,
+  # change back to original salary
+  Predicted_Salary = exp(ppd_model2_mean),
+  Lower_Salary     = exp(ppd_model2_lower),
+  Upper_Salary     = exp(ppd_model2_upper)
 )
 
-# 换回原始薪资尺度
-ppd_summary <- ppd_summary %>%
-  mutate(
-    M1_mean_salary  = exp(M1_mean),
-    M1_lower_salary = exp(M1_lower),
-    M1_upper_salary = exp(M1_upper),
-    M2_mean_salary  = exp(M2_mean),
-    M2_lower_salary = exp(M2_lower),
-    M2_upper_salary = exp(M2_upper)
-  )
+# overpaid / underpaid
+results_model2$Status <- "Fair"
+results_model2$Status[results_model2$log_Salary > results_model2$PPD_upper] <- "Overpaid"
+results_model2$Status[results_model2$log_Salary < results_model2$PPD_lower] <- "Underpaid"
 
-# ── 打印数值对比表（log scale）────────────────────────────────
-cat("PPD Credible Interval Comparison (log salary scale):\n")
-cat(sprintf("%-20s %-5s %8s | %8s %8s %8s | %8s %8s %8s\n",
-            "NAME", "POS", "Actual",
-            "M1_mean", "M1_lower", "M1_upper",
-            "M2_mean", "M2_lower", "M2_upper"))
-cat(strrep("-", 95), "\n")
+cat("\nOverpaid players:\n")
+print(results_model2[results_model2$Status == "Overpaid",
+              c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
 
-for (i in 1:nrow(ppd_summary)) {
-  cat(sprintf("%-20s %-5s %8.3f | %8.3f %8.3f %8.3f | %8.3f %8.3f %8.3f\n",
-              ppd_summary$NAME[i],
-              ppd_summary$POS[i],
-              ppd_summary$Actual_logSalary[i],
-              ppd_summary$M1_mean[i],  ppd_summary$M1_lower[i],  ppd_summary$M1_upper[i],
-              ppd_summary$M2_mean[i],  ppd_summary$M2_lower[i],  ppd_summary$M2_upper[i]))
-}
-
-# ── 可视化：随机抽30个球员展示 PPD CI 对比 ───────────────────
-set.seed(42)
-sample_players <- sample(ppd_summary$NAME, 30)
-plot_df <- ppd_summary %>%
-  filter(NAME %in% sample_players) %>%
-  arrange(Actual_logSalary)
-
-# 整理成长格式方便 ggplot
-plot_long <- bind_rows(
-  plot_df %>% mutate(model = "Model 1", mean = M1_mean, lower = M1_lower, upper = M1_upper),
-  plot_df %>% mutate(model = "Model 2", mean = M2_mean, lower = M2_lower, upper = M2_upper)
-)
-
-ggplot(plot_long, aes(x = reorder(NAME, Actual_logSalary), color = model)) +
-  geom_point(aes(y = mean), position = position_dodge(width = 0.6), size = 2) +
-  geom_errorbar(aes(ymin = lower, ymax = upper),
-                position = position_dodge(width = 0.6), width = 0.4) +
-  geom_point(data = plot_df, aes(x = NAME, y = Actual_logSalary),
-             color = "black", shape = 4, size = 3, inherit.aes = FALSE) +
-  coord_flip() +
-  labs(
-    title    = "PPD 95% Credible Intervals: Model 1 vs Model 2",
-    subtitle = "Black cross = actual log salary",
-    x        = "Player",
-    y        = "log(Salary)",
-    color    = "Model"
-  ) +
-  theme_bw()
-
-# ── overpaid / underpaid 判定（基于各自模型的 95% CI）────────
-ppd_summary <- ppd_summary %>%
-  mutate(
-    M1_status = case_when(
-      Actual_logSalary > M1_upper ~ "Overpaid",
-      Actual_logSalary < M1_lower ~ "Underpaid",
-      TRUE ~ "Fair"
-    ),
-    M2_status = case_when(
-      Actual_logSalary > M2_upper ~ "Overpaid",
-      Actual_logSalary < M2_lower ~ "Underpaid",
-      TRUE ~ "Fair"
-    )
-  )
-
-cat("\n── Model 1 status summary ──\n")
-print(table(ppd_summary$M1_status))
-
-cat("\n── Model 2 status summary ──\n")
-print(table(ppd_summary$M2_status))
-
-cat("\n── Players where two models disagree ──\n")
-disagree <- ppd_summary %>%
-  filter(M1_status != M2_status) %>%
-  select(NAME, POS, Actual_Salary, M1_status, M2_status,
-         M1_mean_salary, M2_mean_salary)
-print(disagree)
+cat("\nUnderpaid players:\n")
+print(results_model2[results_model2$Status == "Underpaid",
+              c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
 ```
