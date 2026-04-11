@@ -177,6 +177,23 @@ We notice that for the heat map, there's no correlation coefficient greater than
 
 Note that for our VIF values, there exists one VIF value of $6.016229$ (`PpG`) which is normally considered to be a concerning threshold that requires further investigation since this variable could potentially be affecting coefficient estimates. Since `PpG` represents points per game, higher `PpG` surely results in higher `Salary`. However, we decide not to drop this column, since this VIF value is not extremely high (less than 10), and this variable acts as a key factor to consider for our research question.
 
+According to the distributions of our explanatory variables, we notice that those variables all have different ranges. In order to do later on analysis, we need to standardize our 8 predictors to make our prior specifications become consistent. And without standardization, coefficients are not comparable.
+```{r}
+df <- df %>%
+  mutate(
+    log_salary = log(Salary),
+    USG_s = scale(USG)[,1],
+    TO_s  = scale(TO)[,1],
+    TS_s  = scale(TS)[,1],
+    PpG_s = scale(PpG)[,1],
+    RpG_s = scale(RpG)[,1],
+    ApG_s = scale(ApG)[,1],
+    SpG_s = scale(SpG)[,1],
+    BpG_s = scale(BpG)[,1]
+  )
+head(df)
+```
+
 ## Model 1: Bayesian Linear Regression
 
 Our naive model is linear regression.
