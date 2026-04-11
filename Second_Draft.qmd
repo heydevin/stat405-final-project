@@ -312,7 +312,7 @@ loo_m2 <- loo(log_lik_m2, r_eff = relative_eff(exp(log_lik_m2)))
 cat("\nLoo compare:", loo_compare(loo_m1, loo_m2), "\n")
 ```
 
-## Posterior Predictive Distribution Results
+## 95% Posterior Predictive Interval of Results
 
 ```{r, warning=FALSE, message=FALSE}
 # Model 1
@@ -385,4 +385,90 @@ print(results_model2[results_model2$Status == "Overpaid",
 cat("\nUnderpaid players:\n")
 print(results_model2[results_model2$Status == "Underpaid",
               c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
+```
+
+### True salaries against the 95% posterior predictive intervals Plot
+
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+make_plot_df <- function(res, model_label) {
+  res %>%
+    arrange(Actual_Salary) %>%
+    mutate(
+      player_idx = row_number(),
+      Model      = model_label,
+      Status     = factor(Status, levels = c("Underpaid", "Fair", "Overpaid"))
+    )
+}
+
+plot_df1 <- make_plot_df(results_model1, "Model 1")
+plot_df2 <- make_plot_df(results_model2, "Model 2")
+plot_df  <- bind_rows(plot_df1, plot_df2)
+
+status_colours <- c(
+  Underpaid = "#2166ac",
+  Fair      = "#b0b0b0",
+  Overpaid  = "#d73027"
+)
+
+salary_cap <- quantile(plot_df$Upper_Salary, 0.97) / 1e6  # clip top 3%
+
+ggplot(plot_df, aes(x = player_idx)) +
+
+  # 95 % posterior predictive interval ribbon
+  geom_ribbon(
+    aes(
+      ymin = pmax(Lower_Salary / 1e6, 0.01),
+      ymax = pmin(Upper_Salary / 1e6, salary_cap)
+    ),
+    fill = "#a8c8e8", alpha = 0.45
+  ) +
+
+  # Predicted salary line
+  geom_line(
+    aes(y = pmin(Predicted_Salary / 1e6, salary_cap)),
+    colour = "#4393c3", linewidth = 0.6, linetype = "dashed"
+  ) +
+
+  # Actual salary dots, coloured by pay status
+  geom_point(
+    aes(y = Actual_Salary / 1e6, colour = Status, size = Status),
+    alpha = 0.9
+  ) +
+
+  scale_colour_manual(values = status_colours, name = "Pay Status") +
+  scale_size_manual(
+    values = c(Underpaid = 2.2, Fair = 1.2, Overpaid = 2.8),
+    guide = "none"
+  ) +
+
+  scale_y_log10(
+    labels = function(x) paste0("$", round(x, 1), "M"),
+    breaks = c(0.5, 1, 2, 5, 10, 20, 40),
+    limits = c(0.3, max(plot_df$Actual_Salary / 1e6) * 1.1)
+  ) +
+
+  facet_wrap(~Model, ncol = 1) +
+
+  labs(
+    title    = "True Salaries vs 95% Posterior Predictive Intervals",
+    subtitle = "Log scale · sorted by actual salary · blue band = 95% CI · dashed = posterior mean",
+    x        = "Player rank (by actual salary)",
+    y        = "Salary (USD millions, log scale)"
+  ) +
+
+  theme_bw(base_size = 13) +
+  theme(
+    legend.position   = "top",
+    legend.key.size   = unit(1.2, "lines"),
+    strip.background  = element_rect(fill = "#e8eef4"),
+    strip.text        = element_text(face = "bold", size = 12),
+    panel.grid.minor  = element_blank(),
+    panel.grid.major  = element_line(colour = "grey90"),
+    plot.title        = element_text(face = "bold", size = 14),
+    plot.subtitle     = element_text(colour = "grey40", size = 10)
+  )
 ```
