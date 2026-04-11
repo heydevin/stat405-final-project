@@ -484,7 +484,7 @@ fit_m1_vi <- vb(
 )
 
 # using model2.stan for VI
-fit_m1_vi <- vb(
+fit_m2_vi <- vb(
   stan_model("model2.stan"),
   data      = stan_data_m2,
   algorithm = "meanfield",
@@ -563,5 +563,147 @@ comparison_df %>%
   ) +
   theme_bw() +
   theme(legend.position = "top")
+```
+```{r}
+
+# extract posterior samples
+pars_beta  <- paste0("beta[",  1:8, "]")
+pars_alpha <- paste0("alpha[", 1:7, "]")
+pars_hyper <- c("mu_a", "tau", "sigma")
+
+pos_labels  <- pos_levels # 7 positions in total
+beta_labels <- c("USG","TO","TS","PpG","RpG","ApG","SpG","BpG")
+
+# comparison for Beta coefficient（HMC vs VI)
+draws_hmc_beta <- as.matrix(fit_m2,    pars = pars_beta)
+draws_vi_beta  <- as.matrix(fit_m2_vi, pars = pars_beta)
+
+df_hmc_beta <- as.data.frame(draws_hmc_beta) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi_beta <- as.data.frame(draws_vi_beta) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+param_map_beta <- setNames(beta_labels, pars_beta)
+
+bind_rows(df_hmc_beta, df_vi_beta) %>%
+  mutate(parameter = param_map_beta[parameter],
+         parameter = factor(parameter, levels = beta_labels)) %>%
+  ggplot(aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 4) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Beta posteriors — HMC vs VI",
+    subtitle = "Shared coefficients across all positions",
+    x = "Parameter value", y = "Density",
+    fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# compare: Position intercepts alpha[j]  ─────────────
+draws_hmc_alpha <- as.matrix(fit_m2,    pars = pars_alpha)
+draws_vi_alpha  <- as.matrix(fit_m2_vi, pars = pars_alpha)
+
+param_map_alpha <- setNames(pos_labels, pars_alpha)
+
+df_hmc_alpha <- as.data.frame(draws_hmc_alpha) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi_alpha <- as.data.frame(draws_vi_alpha) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+bind_rows(df_hmc_alpha, df_vi_alpha) %>%
+  mutate(parameter = param_map_alpha[parameter],
+         parameter = factor(parameter, levels = pos_labels)) %>%
+  ggplot(aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 4) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Position intercepts α_j — HMC vs VI",
+    subtitle = "Each position has its own intercept — key feature of hierarchical model",
+    x = "Parameter value", y = "Density",
+    fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# compare Hyperparameters: mu_a, tau, sigma 
+draws_hmc_hyper <- as.matrix(fit_m2,    pars = pars_hyper)
+draws_vi_hyper  <- as.matrix(fit_m2_vi, pars = pars_hyper)
+
+df_hmc_hyper <- as.data.frame(draws_hmc_hyper) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi_hyper <- as.data.frame(draws_vi_hyper) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+bind_rows(df_hmc_hyper, df_vi_hyper) %>%
+  mutate(parameter = factor(parameter, levels = pars_hyper)) %>%
+  ggplot(aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 3) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Hyperparameters — HMC vs VI",
+    subtitle = "mu_a = global mean intercept, tau = between-position SD",
+    x = "Parameter value", y = "Density",
+    fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# Quantify the SD comparison for all parameters
+all_pars   <- c(pars_beta, pars_alpha, pars_hyper)
+all_labels <- c(beta_labels, pos_labels, pars_hyper)
+
+draws_hmc_all <- as.matrix(fit_m2,    pars = all_pars)
+draws_vi_all  <- as.matrix(fit_m2_vi, pars = all_pars)
+
+comparison_m2 <- data.frame(
+  Parameter = all_labels,
+  Type      = c(rep("Beta", 8), rep("Alpha (position)", 7), rep("Hyperparameter", 3)),
+  HMC_mean  = colMeans(draws_hmc_all),
+  VI_mean   = colMeans(draws_vi_all),
+  HMC_sd    = apply(draws_hmc_all, 2, sd),
+  VI_sd     = apply(draws_vi_all,  2, sd)
+) %>%
+  mutate(
+    sd_ratio    = round(VI_sd / HMC_sd, 3),
+    VI_narrower = ifelse(sd_ratio < 1, "Yes", "No")
+  )
+
+print(comparison_m2)
+
+# SD comparison visualization by bar chart(differs in position)
+comparison_m2 %>%
+  select(Parameter, Type, HMC_sd, VI_sd) %>%
+  pivot_longer(c(HMC_sd, VI_sd), names_to = "Method", values_to = "SD") %>%
+  mutate(Method = ifelse(Method == "HMC_sd", "HMC", "VI")) %>%
+  ggplot(aes(x = Parameter, y = SD, fill = Method)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  facet_wrap(~Type, scales = "free_x", ncol = 1) +
+  scale_fill_manual(values = c("HMC" = "#3266ad", "VI" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Posterior SD comparison — HMC vs VI",
+    subtitle = "VI consistently produces narrower posteriors across all parameter types",
+    x = NULL, y = "Posterior SD"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    axis.text.x     = element_text(angle = 45, hjust = 1)
+  )
 ```
 
