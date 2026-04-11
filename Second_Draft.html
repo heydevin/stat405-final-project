@@ -406,6 +406,36 @@ window.Quarto = {
 </div>
 <p>We notice that for the heat map, there’s no correlation coefficient greater than <span class="math inline">\(0.8\)</span>, which means that all the variables at this stage are not considered to be highly correlated to each other. So we decide not to drop any of them.</p>
 <p>Note that for our VIF values, there exists one VIF value of <span class="math inline">\(6.016229\)</span> (<code>PpG</code>) which is normally considered to be a concerning threshold that requires further investigation since this variable could potentially be affecting coefficient estimates. Since <code>PpG</code> represents points per game, higher <code>PpG</code> surely results in higher <code>Salary</code>. However, we decide not to drop this column, since this VIF value is not extremely high (less than 10), and this variable acts as a key factor to consider for our research question.</p>
+<p>According to the distributions of our explanatory variables, we notice that those variables all have different ranges. In order to do later on analysis, we need to standardize our 8 predictors to make our prior specifications become consistent. Without standardization, coefficients are not comparable. In conclusion, Standardization ensures that the same prior is equally informative for all predictors regardless of their original units, and the posterior coefficients can be directly compared to assess the relative importance of each stat.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">log_salary =</span> <span class="fu">log</span>(Salary),</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">USG_s =</span> <span class="fu">scale</span>(USG)[,<span class="dv">1</span>],</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">TO_s  =</span> <span class="fu">scale</span>(TO)[,<span class="dv">1</span>],</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">TS_s  =</span> <span class="fu">scale</span>(TS)[,<span class="dv">1</span>],</span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">PpG_s =</span> <span class="fu">scale</span>(PpG)[,<span class="dv">1</span>],</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">RpG_s =</span> <span class="fu">scale</span>(RpG)[,<span class="dv">1</span>],</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">ApG_s =</span> <span class="fu">scale</span>(ApG)[,<span class="dv">1</span>],</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">SpG_s =</span> <span class="fu">scale</span>(SpG)[,<span class="dv">1</span>],</span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">BpG_s =</span> <span class="fu">scale</span>(BpG)[,<span class="dv">1</span>]</span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(df)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 25
+  NAME   TEAM  CUR   POS     AGE    GP   MpG   USG    TO    TS   PpG   RpG   ApG
+  &lt;chr&gt;  &lt;chr&gt; &lt;chr&gt; &lt;chr&gt; &lt;dbl&gt; &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+1 A.J. … Mil   *     G      26.5    60  29.5  13.3   9.7 0.611   9.8   2.5   1.9
+2 Aaron… Den   *     F      30.5    26  27.5  22.9   7.8 0.617  16.6   6.1   2.5
+3 Aaron… Hou   *     G      29.4    43  13    17.9  11.2 0.546   5.4   0.9   0.9
+4 Aaron… Ind   *     G-F    26.4    37  29.6  19.7  10.5 0.524  13.1   4.5   2.1
+5 Aaron… Okc   *     G      27.2    51  23.5  19.8  12.7 0.537  10.2   3.4   1.8
+6 Ace B… Uta   *     F      19.6    58  27.1  20.1  10.6 0.53   12.5   4     1.7
+# ℹ 12 more variables: SpG &lt;dbl&gt;, BpG &lt;dbl&gt;, Salary &lt;dbl&gt;, log_salary &lt;dbl&gt;,
+#   USG_s &lt;dbl&gt;, TO_s &lt;dbl&gt;, TS_s &lt;dbl&gt;, PpG_s &lt;dbl&gt;, RpG_s &lt;dbl&gt;, ApG_s &lt;dbl&gt;,
+#   SpG_s &lt;dbl&gt;, BpG_s &lt;dbl&gt;</code></pre>
+</div>
+</div>
 </section>
 </section>
 <section id="model-1-bayesian-linear-regression" class="level2">
@@ -413,14 +443,22 @@ window.Quarto = {
 <p>Our naive model is linear regression.</p>
 <p><span class="math display">\[\log(salary)_i \sim \mathcal{N}(\alpha + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)\]</span></p>
 <p>And we have</p>
-<p><span class="math display">\[\alpha \sim \mathcal{N}(16, 2) \\ \beta_1 \sim \mathcal{N}(), \\ \beta_2 \sim \mathcal{N}(), \\ \beta_3 \sim \mathcal{N}(), \\ \beta_4 \sim \mathcal{N}(), \\ \beta_5 \sim \mathcal{N}(), \\ \beta_6 \sim \mathcal{N}(), \\ \beta_7 \sim \mathcal{N}(), \\ \beta_8 \sim \mathcal{N}(), \\ \sigma \sim ()\]</span></p>
+<p><span class="math display">\[\alpha \sim \mathcal{N}(16, 2) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)\]</span></p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="do">## for checking</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>ols_fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(<span class="fu">log</span>(Salary) <span class="sc">~</span> USG_s <span class="sc">+</span> TO_s <span class="sc">+</span> TS_s <span class="sc">+</span> PpG_s <span class="sc">+</span> </span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>                RpG_s <span class="sc">+</span> ApG_s <span class="sc">+</span> SpG_s <span class="sc">+</span> BpG_s, <span class="at">data =</span> df)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(ols_fit)<span class="sc">$</span>sigma</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.95107</code></pre>
+</div>
+</div>
 </section>
 <section id="model-2-hierarchical-bayesian-linear-regression" class="level2">
 <h2 class="anchored" data-anchor-id="model-2-hierarchical-bayesian-linear-regression">Model 2: Hierarchical Bayesian Linear Regression</h2>
 <p>Our complex model is Hierarchical Linear Regression with position-specific intercepts.</p>
-<p><span class="math display">\[\log(salary)_i \sim \mathcal{N}(\alpha_j + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)\]</span></p>
-<p>And we have</p>
-<p><span class="math display">\[\alpha_j \sim \mathcal{N}(\mu_a, \tau^2) \\ \beta_1 \sim \mathcal{N}(), \\ \beta_2 \sim \mathcal{N}(), \\ \beta_3 \sim \mathcal{N}(), \\ \beta_4 \sim \mathcal{N}(), \\ \beta_5 \sim \mathcal{N}(), \\ \beta_6 \sim \mathcal{N}(), \\ \beta_7 \sim \mathcal{N}(), \\ \beta_8 \sim \mathcal{N}(), \\ \tau \sim ()\]</span></p>
+<p><span class="math display">\[\log(salary)_i \sim \mathcal{N}(\alpha_{j_[i]} + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)\]</span> Where <span class="math inline">\(j[i]\)</span> represents the i-th basketball player’s position, <span class="math inline">\(j = 1,2,...,7\)</span>, that we have different 7 positions in total.</p>
+<p><span class="math display">\[\alpha_j \sim \mathcal{N}(\mu_\alpha, \tau^2), \ j = 1,2,...,7 \\ \mu_\alpha \sim \mathcal{N}(16,2) \\ \tau \sim \text{Half-Normal}(0, 1) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)\]</span></p>
 </section>
 
 </main>
