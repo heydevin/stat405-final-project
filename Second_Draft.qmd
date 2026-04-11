@@ -472,3 +472,96 @@ ggplot(plot_df, aes(x = player_idx)) +
     plot.subtitle     = element_text(colour = "grey40", size = 10)
   )
 ```
+## Variational Inference
+
+```{r}
+# using model1.stan for VI
+fit_m1_vi <- vb(
+  stan_model("model1.stan"),
+  data      = stan_data_m1,
+  algorithm = "meanfield",
+  seed      = 42
+)
+
+# using model2.stan for VI
+fit_m1_vi <- vb(
+  stan_model("model2.stan"),
+  data      = stan_data_m2,
+  algorithm = "meanfield",
+  seed      = 42
+)
+```
+
+```{r}
+library(bayesplot)
+library(tidyverse)
+
+pars_of_interest <- c(paste0("beta[", 1:8, "]"), "sigma")
+
+draws_hmc <- as.matrix(fit_m1,    pars = pars_of_interest)
+draws_vi  <- as.matrix(fit_m1_vi, pars = pars_of_interest)
+
+beta_labels <- c("USG","TO","TS","PpG","RpG","ApG","SpG","BpG","sigma")
+
+# HMC vs VI的posterior density
+df_hmc <- as.data.frame(draws_hmc) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi <- as.data.frame(draws_vi) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+df_combined <- bind_rows(df_hmc, df_vi)
+
+param_map <- setNames(beta_labels, pars_of_interest)
+df_combined$parameter <- param_map[df_combined$parameter]
+df_combined$parameter <- factor(df_combined$parameter, levels = beta_labels)
+
+ggplot(df_combined, aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 3) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Posterior distributions: HMC vs VI (Model 1)",
+    subtitle = "VI tends to underestimate posterior variance (narrower curves)",
+    x = "Parameter value", y = "Density", fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# quantify the mean of posterior and difference between SD
+comparison_df <- data.frame(
+  Parameter = beta_labels,
+  HMC_mean  = colMeans(draws_hmc),
+  VI_mean   = colMeans(draws_vi),
+  HMC_sd    = apply(draws_hmc, 2, sd),
+  VI_sd     = apply(draws_vi,  2, sd)
+) %>%
+  mutate(
+    mean_diff  = round(abs(HMC_mean - VI_mean), 4),
+    sd_ratio   = round(VI_sd / HMC_sd, 3),       # <1 represents VI undermines variance
+    VI_narrower = ifelse(sd_ratio < 1, "Yes", "No")
+  )
+
+print(comparison_df)
+
+# visualize SD comparison
+comparison_df %>%
+  filter(Parameter != "sigma") %>%  
+  select(Parameter, HMC_sd, VI_sd) %>%
+  pivot_longer(-Parameter, names_to = "Method", values_to = "SD") %>%
+  mutate(Method = ifelse(Method == "HMC_sd", "HMC", "VI")) %>%
+  ggplot(aes(x = Parameter, y = SD, fill = Method)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  scale_fill_manual(values = c("HMC" = "#3266ad", "VI" = "#D85A30")) +
+  labs(
+    title    = "Posterior standard deviation: HMC vs VI",
+    subtitle = "VI consistently underestimates uncertainty (lower SD)",
+    x = "Parameter", y = "Posterior SD"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+

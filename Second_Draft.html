@@ -460,6 +460,630 @@ window.Quarto = {
 <p><span class="math display">\[\log(salary)_i \sim \mathcal{N}(\alpha_{j_[i]} + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)\]</span> Where <span class="math inline">\(j[i]\)</span> represents the i-th basketball player’s position, <span class="math inline">\(j = 1,2,...,7\)</span>, that we have different 7 positions in total.</p>
 <p><span class="math display">\[\alpha_j \sim \mathcal{N}(\mu_\alpha, \tau^2), \ j = 1,2,...,7 \\ \mu_\alpha \sim \mathcal{N}(16,2) \\ \tau \sim \text{Half-Normal}(0, 1) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)\]</span></p>
 </section>
+<section id="run-posterior-using-stan" class="level2">
+<h2 class="anchored" data-anchor-id="run-posterior-using-stan">Run Posterior Using Stan</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(rstan)</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(loo)</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">mc.cores =</span> parallel<span class="sc">::</span><span class="fu">detectCores</span>())</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a><span class="fu">rstan_options</span>(<span class="at">auto_write =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>pred_vars <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"USG"</span>, <span class="st">"TO"</span>, <span class="st">"TS"</span>, <span class="st">"PpG"</span>, <span class="st">"RpG"</span>, <span class="st">"ApG"</span>, <span class="st">"SpG"</span>, <span class="st">"BpG"</span>)</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="co"># standardize </span></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>X_raw <span class="ot">&lt;-</span> df[, pred_vars]</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>X_scaled <span class="ot">&lt;-</span> <span class="fu">scale</span>(X_raw)</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>y <span class="ot">&lt;-</span> <span class="fu">log</span>(df<span class="sc">$</span>Salary)</span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a><span class="co"># position index</span></span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>pos_levels <span class="ot">&lt;-</span> <span class="fu">levels</span>(<span class="fu">factor</span>(df<span class="sc">$</span>POS))</span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>pos_id     <span class="ot">&lt;-</span> <span class="fu">as.integer</span>(<span class="fu">factor</span>(df<span class="sc">$</span>POS, <span class="at">levels =</span> pos_levels))</span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>J          <span class="ot">&lt;-</span> <span class="fu">length</span>(pos_levels)</span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>N          <span class="ot">&lt;-</span> <span class="fu">nrow</span>(df)</span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a>K          <span class="ot">&lt;-</span> <span class="fu">length</span>(pred_vars)</span>
+<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"N ="</span>, N, <span class="st">"| K ="</span>, K, <span class="st">"| J ="</span>, J, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>N = 531 | K = 8 | J = 7 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Positions:"</span>, pos_levels, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Positions: C C-F F F-C F-G G G-F </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># model 1 data</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>stan_data_m1 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> N,</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">K =</span> K,</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">X =</span> X_scaled,</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> y</span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>fit_m1 <span class="ot">&lt;-</span> <span class="fu">stan</span>(</span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">file    =</span> <span class="st">"model1.stan"</span>,</span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">data    =</span> stan_data_m1,</span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">iter    =</span> <span class="dv">4000</span>,          <span class="co"># 2000 warmup + 2000 sampling</span></span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">warmup  =</span> <span class="dv">2000</span>,</span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains  =</span> <span class="dv">4</span>,</span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed    =</span> <span class="dv">42</span>,</span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>),</span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">refresh =</span> <span class="dv">0</span></span>
+<span id="cb33-18"><a href="#cb33-18" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb33-19"><a href="#cb33-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-20"><a href="#cb33-20" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_m1, <span class="at">pars =</span> <span class="fu">c</span>(<span class="st">"alpha"</span>, <span class="st">"beta"</span>, <span class="st">"sigma"</span>), <span class="at">probs =</span> <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.5</span>, <span class="fl">0.975</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=4000; warmup=2000; thin=1; 
+post-warmup draws per chain=2000, total post-warmup draws=8000.
+
+         mean se_mean   sd  2.5%   50% 97.5% n_eff Rhat
+alpha   15.51       0 0.04 15.43 15.51 15.59 11448    1
+beta[1]  0.02       0 0.07 -0.11  0.02  0.15  6534    1
+beta[2]  0.11       0 0.05  0.02  0.11  0.21  7620    1
+beta[3] -0.05       0 0.05 -0.14 -0.05  0.04  8802    1
+beta[4]  0.85       0 0.10  0.65  0.85  1.05  4270    1
+beta[5]  0.00       0 0.07 -0.12  0.00  0.13  7132    1
+beta[6]  0.02       0 0.07 -0.11  0.03  0.16  7097    1
+beta[7]  0.05       0 0.06 -0.06  0.05  0.17 11239    1
+beta[8] -0.05       0 0.05 -0.15 -0.04  0.06  8426    1
+sigma    0.95       0 0.03  0.90  0.95  1.01 10538    1
+
+Samples were drawn using NUTS(diag_e) at Sat Apr 11 12:46:38 2026.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># model 2 data</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>stan_data_m2 <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">N      =</span> N,</span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">K      =</span> K,</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">J      =</span> J,</span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">X      =</span> X_scaled,</span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">y      =</span> y,</span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">pos_id =</span> pos_id</span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>fit_m2 <span class="ot">&lt;-</span> <span class="fu">stan</span>(</span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">file    =</span> <span class="st">"model2.stan"</span>,</span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">data    =</span> stan_data_m2,</span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">iter    =</span> <span class="dv">4000</span>,</span>
+<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">warmup  =</span> <span class="dv">2000</span>,</span>
+<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains  =</span> <span class="dv">4</span>,</span>
+<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed    =</span> <span class="dv">42</span>,</span>
+<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>),</span>
+<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">refresh =</span> <span class="dv">0</span></span>
+<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_m2, <span class="at">pars =</span> <span class="fu">c</span>(<span class="st">"mu_a"</span>, <span class="st">"tau"</span>, <span class="st">"alpha"</span>, <span class="st">"beta"</span>, <span class="st">"sigma"</span>),</span>
+<span id="cb35-23"><a href="#cb35-23" aria-hidden="true" tabindex="-1"></a>      <span class="at">probs =</span> <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.5</span>, <span class="fl">0.975</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=4000; warmup=2000; thin=1; 
+post-warmup draws per chain=2000, total post-warmup draws=8000.
+
+          mean se_mean   sd  2.5%   50% 97.5% n_eff Rhat
+mu_a     15.53       0 0.16 15.21 15.53 15.87  5221    1
+tau       0.37       0 0.17  0.14  0.34  0.80  4132    1
+alpha[1] 15.09       0 0.16 14.78 15.09 15.39  4889    1
+alpha[2] 15.44       0 0.19 15.06 15.44 15.79  5976    1
+alpha[3] 15.58       0 0.08 15.43 15.58 15.73  8949    1
+alpha[4] 15.75       0 0.16 15.45 15.75 16.08  7111    1
+alpha[5] 15.93       0 0.25 15.47 15.92 16.46  5810    1
+alpha[6] 15.53       0 0.07 15.39 15.53 15.68  7018    1
+alpha[7] 15.43       0 0.14 15.17 15.44 15.70  8311    1
+beta[1]   0.02       0 0.06 -0.11  0.02  0.15  6073    1
+beta[2]   0.12       0 0.05  0.03  0.12  0.21  6890    1
+beta[3]  -0.06       0 0.05 -0.15 -0.06  0.03  7553    1
+beta[4]   0.81       0 0.10  0.61  0.81  1.00  4322    1
+beta[5]   0.05       0 0.07 -0.09  0.05  0.19  5612    1
+beta[6]   0.03       0 0.07 -0.11  0.03  0.18  5984    1
+beta[7]   0.03       0 0.06 -0.08  0.03  0.14  7190    1
+beta[8]  -0.01       0 0.06 -0.12 -0.01  0.10  6149    1
+sigma     0.94       0 0.03  0.88  0.94  1.00  9435    1
+
+Samples were drawn using NUTS(diag_e) at Sat Apr 11 12:47:02 2026.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>stan_diag_m1 <span class="ot">&lt;-</span> <span class="fu">summary</span>(fit_m1)<span class="sc">$</span>summary</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>stan_diag_m2 <span class="ot">&lt;-</span> <span class="fu">summary</span>(fit_m2)<span class="sc">$</span>summary</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Model 1 - max R-hat:"</span>, <span class="fu">max</span>(stan_diag_m1[, <span class="st">"Rhat"</span>], <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Model 1 - max R-hat: 1.003142 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Model 2 - max R-hat:"</span>, <span class="fu">max</span>(stan_diag_m2[, <span class="st">"Rhat"</span>], <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Model 2 - max R-hat: 1.00099 </code></pre>
+</div>
+</div>
+</section>
+<section id="loo-cv-for-result-comparison" class="level2">
+<h2 class="anchored" data-anchor-id="loo-cv-for-result-comparison">LOO-CV for Result Comparison</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># leave one out cross validation</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>log_lik_m1 <span class="ot">&lt;-</span> <span class="fu">extract_log_lik</span>(fit_m1, <span class="at">merge_chains =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>log_lik_m2 <span class="ot">&lt;-</span> <span class="fu">extract_log_lik</span>(fit_m2, <span class="at">merge_chains =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>loo_m1 <span class="ot">&lt;-</span> <span class="fu">loo</span>(log_lik_m1, <span class="at">r_eff =</span> <span class="fu">relative_eff</span>(<span class="fu">exp</span>(log_lik_m1)))</span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>loo_m2 <span class="ot">&lt;-</span> <span class="fu">loo</span>(log_lik_m2, <span class="at">r_eff =</span> <span class="fu">relative_eff</span>(<span class="fu">exp</span>(log_lik_m2)))</span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Loo compare:"</span>, <span class="fu">loo_compare</span>(loo_m1, loo_m2), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Loo compare: 0 -6.588733 0 3.934333 -726.4517 -733.0404 16.97249 16.99469 15.6422 11.01665 1.42604 1.09894 1452.903 1466.081 33.94497 33.98937 </code></pre>
+</div>
+</div>
+</section>
+<section id="posterior-predictive-interval-of-results" class="level2">
+<h2 class="anchored" data-anchor-id="posterior-predictive-interval-of-results">95% Posterior Predictive Interval of Results</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Model 1</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>y_rep_model1  <span class="ot">&lt;-</span> <span class="fu">extract</span>(fit_m1, <span class="st">"y_rep"</span>)<span class="sc">$</span>y_rep</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="co"># posterior predictive distribution mean &amp; 95% ci（log scale）</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>ppd_model1_mean  <span class="ot">&lt;-</span> <span class="fu">apply</span>(y_rep_model1, <span class="dv">2</span>, mean)</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>ppd_model1_lower <span class="ot">&lt;-</span> <span class="fu">apply</span>(y_rep_model1, <span class="dv">2</span>, quantile, <span class="fl">0.025</span>)</span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>ppd_model1_upper <span class="ot">&lt;-</span> <span class="fu">apply</span>(y_rep_model1, <span class="dv">2</span>, quantile, <span class="fl">0.975</span>)</span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>results_model1 <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">NAME          =</span> df<span class="sc">$</span>NAME,</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">POS           =</span> df<span class="sc">$</span>POS,</span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">Actual_Salary =</span> df<span class="sc">$</span>Salary,</span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">log_Salary    =</span> y,</span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">PPD_mean      =</span> ppd_model1_mean,</span>
+<span id="cb43-15"><a href="#cb43-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">PPD_lower     =</span> ppd_model1_lower,</span>
+<span id="cb43-16"><a href="#cb43-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">PPD_upper     =</span> ppd_model1_upper,</span>
+<span id="cb43-17"><a href="#cb43-17" aria-hidden="true" tabindex="-1"></a>  <span class="co"># change back to original salary</span></span>
+<span id="cb43-18"><a href="#cb43-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">Predicted_Salary =</span> <span class="fu">exp</span>(ppd_model1_mean),</span>
+<span id="cb43-19"><a href="#cb43-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">Lower_Salary     =</span> <span class="fu">exp</span>(ppd_model1_lower),</span>
+<span id="cb43-20"><a href="#cb43-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">Upper_Salary     =</span> <span class="fu">exp</span>(ppd_model1_upper)</span>
+<span id="cb43-21"><a href="#cb43-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb43-22"><a href="#cb43-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-23"><a href="#cb43-23" aria-hidden="true" tabindex="-1"></a><span class="co"># overpaid / underpaid</span></span>
+<span id="cb43-24"><a href="#cb43-24" aria-hidden="true" tabindex="-1"></a>results_model1<span class="sc">$</span>Status <span class="ot">&lt;-</span> <span class="st">"Fair"</span></span>
+<span id="cb43-25"><a href="#cb43-25" aria-hidden="true" tabindex="-1"></a>results_model1<span class="sc">$</span>Status[results_model1<span class="sc">$</span>log_Salary <span class="sc">&gt;</span> results_model1<span class="sc">$</span>PPD_upper] <span class="ot">&lt;-</span> <span class="st">"Overpaid"</span></span>
+<span id="cb43-26"><a href="#cb43-26" aria-hidden="true" tabindex="-1"></a>results_model1<span class="sc">$</span>Status[results_model1<span class="sc">$</span>log_Salary <span class="sc">&lt;</span> results_model1<span class="sc">$</span>PPD_lower] <span class="ot">&lt;-</span> <span class="st">"Underpaid"</span></span>
+<span id="cb43-27"><a href="#cb43-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-28"><a href="#cb43-28" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Overpaid players:</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Overpaid players:</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(results_model1[results_model1<span class="sc">$</span>Status <span class="sc">==</span> <span class="st">"Overpaid"</span>,</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>              <span class="fu">c</span>(<span class="st">"NAME"</span>, <span class="st">"POS"</span>, <span class="st">"Actual_Salary"</span>, <span class="st">"Predicted_Salary"</span>)])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>              NAME POS Actual_Salary Predicted_Salary
+271 Jonathan Isaac   F      15000000          2121136
+314  Kevin Huerter G-F      17991071          2563025</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Underpaid players:</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Underpaid players:</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(results_model1[results_model1<span class="sc">$</span>Status <span class="sc">==</span> <span class="st">"Underpaid"</span>,</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>              <span class="fu">c</span>(<span class="st">"NAME"</span>, <span class="st">"POS"</span>, <span class="st">"Actual_Salary"</span>, <span class="st">"Predicted_Salary"</span>)])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                   NAME POS Actual_Salary Predicted_Salary
+81       Charles Bassey C-F        263940          2460660
+82       Charles Bassey C-F        263940          2424952
+83       Charles Bassey C-F        263940          2451396
+89     Christian Koloko   C        263940          2275392
+90     Christian Koloko   C        263940          2237604
+91     Christian Koloko   C        263940          2257355
+92     Christian Koloko   C        263940          2224512
+111       Dalano Banton   F        263940          2500621
+112       Dalano Banton   F        263940          2533152
+113       Dalano Banton   F        263940          1970704
+114       Dalano Banton   F        263940          1941259
+280       Jordan Miller   G        712637          5544594
+319      Keyonte George   G       4278960         40784914
+323       Killian Hayes   G        263940          2776887
+324       Killian Hayes   G        263940          2799348
+332        Kobe Sanders   G        475497          4378675
+347     Lawson Lovering   C         87784          4427480
+394        Monte Morris   G        321184          2182365
+431 Patrick Baldwin Jr.   F        263940          2204641
+432 Patrick Baldwin Jr.   F        263940          2138125
+435 Patrick Baldwin Jr.   F        263940          2603725
+436 Patrick Baldwin Jr.   F        263940          2597286
+458   Russell Westbrook   G       2296274         16629512</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Model 2</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>y_rep_model2  <span class="ot">&lt;-</span> <span class="fu">extract</span>(fit_m2, <span class="st">"y_rep"</span>)<span class="sc">$</span>y_rep</span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a><span class="co"># posterior predictive distribution mean &amp; 95% ci（log scale）</span></span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>ppd_model2_mean  <span class="ot">&lt;-</span> <span class="fu">apply</span>(y_rep_model2, <span class="dv">2</span>, mean)</span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>ppd_model2_lower <span class="ot">&lt;-</span> <span class="fu">apply</span>(y_rep_model2, <span class="dv">2</span>, quantile, <span class="fl">0.025</span>)</span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a>ppd_model2_upper <span class="ot">&lt;-</span> <span class="fu">apply</span>(y_rep_model2, <span class="dv">2</span>, quantile, <span class="fl">0.975</span>)</span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a>results_model2 <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">NAME          =</span> df<span class="sc">$</span>NAME,</span>
+<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">POS           =</span> df<span class="sc">$</span>POS,</span>
+<span id="cb51-12"><a href="#cb51-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">Actual_Salary =</span> df<span class="sc">$</span>Salary,</span>
+<span id="cb51-13"><a href="#cb51-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">log_Salary    =</span> y,</span>
+<span id="cb51-14"><a href="#cb51-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">PPD_mean      =</span> ppd_model2_mean,</span>
+<span id="cb51-15"><a href="#cb51-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">PPD_lower     =</span> ppd_model2_lower,</span>
+<span id="cb51-16"><a href="#cb51-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">PPD_upper     =</span> ppd_model2_upper,</span>
+<span id="cb51-17"><a href="#cb51-17" aria-hidden="true" tabindex="-1"></a>  <span class="co"># change back to original salary</span></span>
+<span id="cb51-18"><a href="#cb51-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">Predicted_Salary =</span> <span class="fu">exp</span>(ppd_model2_mean),</span>
+<span id="cb51-19"><a href="#cb51-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">Lower_Salary     =</span> <span class="fu">exp</span>(ppd_model2_lower),</span>
+<span id="cb51-20"><a href="#cb51-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">Upper_Salary     =</span> <span class="fu">exp</span>(ppd_model2_upper)</span>
+<span id="cb51-21"><a href="#cb51-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb51-22"><a href="#cb51-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-23"><a href="#cb51-23" aria-hidden="true" tabindex="-1"></a><span class="co"># overpaid / underpaid</span></span>
+<span id="cb51-24"><a href="#cb51-24" aria-hidden="true" tabindex="-1"></a>results_model2<span class="sc">$</span>Status <span class="ot">&lt;-</span> <span class="st">"Fair"</span></span>
+<span id="cb51-25"><a href="#cb51-25" aria-hidden="true" tabindex="-1"></a>results_model2<span class="sc">$</span>Status[results_model2<span class="sc">$</span>log_Salary <span class="sc">&gt;</span> results_model2<span class="sc">$</span>PPD_upper] <span class="ot">&lt;-</span> <span class="st">"Overpaid"</span></span>
+<span id="cb51-26"><a href="#cb51-26" aria-hidden="true" tabindex="-1"></a>results_model2<span class="sc">$</span>Status[results_model2<span class="sc">$</span>log_Salary <span class="sc">&lt;</span> results_model2<span class="sc">$</span>PPD_lower] <span class="ot">&lt;-</span> <span class="st">"Underpaid"</span></span>
+<span id="cb51-27"><a href="#cb51-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-28"><a href="#cb51-28" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Overpaid players:</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Overpaid players:</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(results_model2[results_model2<span class="sc">$</span>Status <span class="sc">==</span> <span class="st">"Overpaid"</span>,</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>              <span class="fu">c</span>(<span class="st">"NAME"</span>, <span class="st">"POS"</span>, <span class="st">"Actual_Salary"</span>, <span class="st">"Predicted_Salary"</span>)])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>             NAME POS Actual_Salary Predicted_Salary
+130 Deandre Ayton   C      33654814          5063748
+131 Deandre Ayton   C      33654814          5143064
+314 Kevin Huerter G-F      17991071          2456192
+456   Rudy Gobert   C      35000000          4837245</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Underpaid players:</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Underpaid players:</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(results_model2[results_model2<span class="sc">$</span>Status <span class="sc">==</span> <span class="st">"Underpaid"</span>,</span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>              <span class="fu">c</span>(<span class="st">"NAME"</span>, <span class="st">"POS"</span>, <span class="st">"Actual_Salary"</span>, <span class="st">"Predicted_Salary"</span>)])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                   NAME POS Actual_Salary Predicted_Salary
+81       Charles Bassey C-F        263940          2575444
+82       Charles Bassey C-F        263940          2550302
+83       Charles Bassey C-F        263940          2581074
+90     Christian Koloko   C        263940          1694604
+111       Dalano Banton   F        263940          2529156
+112       Dalano Banton   F        263940          2518943
+113       Dalano Banton   F        263940          2146119
+114       Dalano Banton   F        263940          2147026
+280       Jordan Miller   G        712637          5451340
+319      Keyonte George   G       4278960         37488205
+323       Killian Hayes   G        263940          2723548
+324       Killian Hayes   G        263940          2744729
+332        Kobe Sanders   G        475497          4283779
+347     Lawson Lovering   C         87784          3052961
+394        Monte Morris   G        321184          2242864
+399       Myron Gardner   F        395029          2561054
+431 Patrick Baldwin Jr.   F        263940          2563822
+432 Patrick Baldwin Jr.   F        263940          2511565
+435 Patrick Baldwin Jr.   F        263940          2630335
+436 Patrick Baldwin Jr.   F        263940          2581986
+458   Russell Westbrook   G       2296274         16152846</code></pre>
+</div>
+</div>
+<section id="true-salaries-against-the-95-posterior-predictive-intervals-plot" class="level3">
+<h3 class="anchored" data-anchor-id="true-salaries-against-the-95-posterior-predictive-intervals-plot">True salaries against the 95% posterior predictive intervals Plot</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(scales)</span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>make_plot_df <span class="ot">&lt;-</span> <span class="cf">function</span>(res, model_label) {</span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>  res <span class="sc">%&gt;%</span></span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">arrange</span>(Actual_Salary) <span class="sc">%&gt;%</span></span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>      <span class="at">player_idx =</span> <span class="fu">row_number</span>(),</span>
+<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>      <span class="at">Model      =</span> model_label,</span>
+<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a>      <span class="at">Status     =</span> <span class="fu">factor</span>(Status, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Underpaid"</span>, <span class="st">"Fair"</span>, <span class="st">"Overpaid"</span>))</span>
+<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a>plot_df1 <span class="ot">&lt;-</span> <span class="fu">make_plot_df</span>(results_model1, <span class="st">"Model 1"</span>)</span>
+<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a>plot_df2 <span class="ot">&lt;-</span> <span class="fu">make_plot_df</span>(results_model2, <span class="st">"Model 2"</span>)</span>
+<span id="cb59-17"><a href="#cb59-17" aria-hidden="true" tabindex="-1"></a>plot_df  <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(plot_df1, plot_df2)</span>
+<span id="cb59-18"><a href="#cb59-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-19"><a href="#cb59-19" aria-hidden="true" tabindex="-1"></a>status_colours <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb59-20"><a href="#cb59-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">Underpaid =</span> <span class="st">"#2166ac"</span>,</span>
+<span id="cb59-21"><a href="#cb59-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">Fair      =</span> <span class="st">"#b0b0b0"</span>,</span>
+<span id="cb59-22"><a href="#cb59-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">Overpaid  =</span> <span class="st">"#d73027"</span></span>
+<span id="cb59-23"><a href="#cb59-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb59-24"><a href="#cb59-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-25"><a href="#cb59-25" aria-hidden="true" tabindex="-1"></a>salary_cap <span class="ot">&lt;-</span> <span class="fu">quantile</span>(plot_df<span class="sc">$</span>Upper_Salary, <span class="fl">0.97</span>) <span class="sc">/</span> <span class="fl">1e6</span>  <span class="co"># clip top 3%</span></span>
+<span id="cb59-26"><a href="#cb59-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-27"><a href="#cb59-27" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(plot_df, <span class="fu">aes</span>(<span class="at">x =</span> player_idx)) <span class="sc">+</span></span>
+<span id="cb59-28"><a href="#cb59-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-29"><a href="#cb59-29" aria-hidden="true" tabindex="-1"></a>  <span class="co"># 95 % posterior predictive interval ribbon</span></span>
+<span id="cb59-30"><a href="#cb59-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(</span>
+<span id="cb59-31"><a href="#cb59-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(</span>
+<span id="cb59-32"><a href="#cb59-32" aria-hidden="true" tabindex="-1"></a>      <span class="at">ymin =</span> <span class="fu">pmax</span>(Lower_Salary <span class="sc">/</span> <span class="fl">1e6</span>, <span class="fl">0.01</span>),</span>
+<span id="cb59-33"><a href="#cb59-33" aria-hidden="true" tabindex="-1"></a>      <span class="at">ymax =</span> <span class="fu">pmin</span>(Upper_Salary <span class="sc">/</span> <span class="fl">1e6</span>, salary_cap)</span>
+<span id="cb59-34"><a href="#cb59-34" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb59-35"><a href="#cb59-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> <span class="st">"#a8c8e8"</span>, <span class="at">alpha =</span> <span class="fl">0.45</span></span>
+<span id="cb59-36"><a href="#cb59-36" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb59-37"><a href="#cb59-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-38"><a href="#cb59-38" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Predicted salary line</span></span>
+<span id="cb59-39"><a href="#cb59-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(</span>
+<span id="cb59-40"><a href="#cb59-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(<span class="at">y =</span> <span class="fu">pmin</span>(Predicted_Salary <span class="sc">/</span> <span class="fl">1e6</span>, salary_cap)),</span>
+<span id="cb59-41"><a href="#cb59-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"#4393c3"</span>, <span class="at">linewidth =</span> <span class="fl">0.6</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span></span>
+<span id="cb59-42"><a href="#cb59-42" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb59-43"><a href="#cb59-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-44"><a href="#cb59-44" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Actual salary dots, coloured by pay status</span></span>
+<span id="cb59-45"><a href="#cb59-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(</span>
+<span id="cb59-46"><a href="#cb59-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(<span class="at">y =</span> Actual_Salary <span class="sc">/</span> <span class="fl">1e6</span>, <span class="at">colour =</span> Status, <span class="at">size =</span> Status),</span>
+<span id="cb59-47"><a href="#cb59-47" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> <span class="fl">0.9</span></span>
+<span id="cb59-48"><a href="#cb59-48" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb59-49"><a href="#cb59-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-50"><a href="#cb59-50" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(<span class="at">values =</span> status_colours, <span class="at">name =</span> <span class="st">"Pay Status"</span>) <span class="sc">+</span></span>
+<span id="cb59-51"><a href="#cb59-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_size_manual</span>(</span>
+<span id="cb59-52"><a href="#cb59-52" aria-hidden="true" tabindex="-1"></a>    <span class="at">values =</span> <span class="fu">c</span>(<span class="at">Underpaid =</span> <span class="fl">2.2</span>, <span class="at">Fair =</span> <span class="fl">1.2</span>, <span class="at">Overpaid =</span> <span class="fl">2.8</span>),</span>
+<span id="cb59-53"><a href="#cb59-53" aria-hidden="true" tabindex="-1"></a>    <span class="at">guide =</span> <span class="st">"none"</span></span>
+<span id="cb59-54"><a href="#cb59-54" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb59-55"><a href="#cb59-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-56"><a href="#cb59-56" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_log10</span>(</span>
+<span id="cb59-57"><a href="#cb59-57" aria-hidden="true" tabindex="-1"></a>    <span class="at">labels =</span> <span class="cf">function</span>(x) <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">round</span>(x, <span class="dv">1</span>), <span class="st">"M"</span>),</span>
+<span id="cb59-58"><a href="#cb59-58" aria-hidden="true" tabindex="-1"></a>    <span class="at">breaks =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">40</span>),</span>
+<span id="cb59-59"><a href="#cb59-59" aria-hidden="true" tabindex="-1"></a>    <span class="at">limits =</span> <span class="fu">c</span>(<span class="fl">0.3</span>, <span class="fu">max</span>(plot_df<span class="sc">$</span>Actual_Salary <span class="sc">/</span> <span class="fl">1e6</span>) <span class="sc">*</span> <span class="fl">1.1</span>)</span>
+<span id="cb59-60"><a href="#cb59-60" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb59-61"><a href="#cb59-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-62"><a href="#cb59-62" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Model, <span class="at">ncol =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb59-63"><a href="#cb59-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-64"><a href="#cb59-64" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb59-65"><a href="#cb59-65" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"True Salaries vs 95% Posterior Predictive Intervals"</span>,</span>
+<span id="cb59-66"><a href="#cb59-66" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Log scale · sorted by actual salary · blue band = 95% CI · dashed = posterior mean"</span>,</span>
+<span id="cb59-67"><a href="#cb59-67" aria-hidden="true" tabindex="-1"></a>    <span class="at">x        =</span> <span class="st">"Player rank (by actual salary)"</span>,</span>
+<span id="cb59-68"><a href="#cb59-68" aria-hidden="true" tabindex="-1"></a>    <span class="at">y        =</span> <span class="st">"Salary (USD millions, log scale)"</span></span>
+<span id="cb59-69"><a href="#cb59-69" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb59-70"><a href="#cb59-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-71"><a href="#cb59-71" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> <span class="dv">13</span>) <span class="sc">+</span></span>
+<span id="cb59-72"><a href="#cb59-72" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb59-73"><a href="#cb59-73" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position   =</span> <span class="st">"top"</span>,</span>
+<span id="cb59-74"><a href="#cb59-74" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.key.size   =</span> <span class="fu">unit</span>(<span class="fl">1.2</span>, <span class="st">"lines"</span>),</span>
+<span id="cb59-75"><a href="#cb59-75" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.background  =</span> <span class="fu">element_rect</span>(<span class="at">fill =</span> <span class="st">"#e8eef4"</span>),</span>
+<span id="cb59-76"><a href="#cb59-76" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.text        =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
+<span id="cb59-77"><a href="#cb59-77" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.minor  =</span> <span class="fu">element_blank</span>(),</span>
+<span id="cb59-78"><a href="#cb59-78" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.major  =</span> <span class="fu">element_line</span>(<span class="at">colour =</span> <span class="st">"grey90"</span>),</span>
+<span id="cb59-79"><a href="#cb59-79" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title        =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
+<span id="cb59-80"><a href="#cb59-80" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.subtitle     =</span> <span class="fu">element_text</span>(<span class="at">colour =</span> <span class="st">"grey40"</span>, <span class="at">size =</span> <span class="dv">10</span>)</span>
+<span id="cb59-81"><a href="#cb59-81" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Second_Draft_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="variational-inference" class="level2">
+<h2 class="anchored" data-anchor-id="variational-inference">Variational Inference</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb60"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="co"># using model1.stan for VI</span></span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>fit_m1_vi <span class="ot">&lt;-</span> <span class="fu">vb</span>(</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stan_model</span>(<span class="st">"model1.stan"</span>),</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data      =</span> stan_data_m1,</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">algorithm =</span> <span class="st">"meanfield"</span>,</span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed      =</span> <span class="dv">42</span></span>
+<span id="cb60-7"><a href="#cb60-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Chain 1: ------------------------------------------------------------
+Chain 1: EXPERIMENTAL ALGORITHM:
+Chain 1:   This procedure has not been thoroughly tested and may be unstable
+Chain 1:   or buggy. The interface is subject to change.
+Chain 1: ------------------------------------------------------------
+Chain 1: 
+Chain 1: 
+Chain 1: 
+Chain 1: Gradient evaluation took 4e-05 seconds
+Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 0.4 seconds.
+Chain 1: Adjust your expectations accordingly!
+Chain 1: 
+Chain 1: 
+Chain 1: Begin eta adaptation.
+Chain 1: Iteration:   1 / 250 [  0%]  (Adaptation)
+Chain 1: Iteration:  50 / 250 [ 20%]  (Adaptation)
+Chain 1: Iteration: 100 / 250 [ 40%]  (Adaptation)
+Chain 1: Iteration: 150 / 250 [ 60%]  (Adaptation)
+Chain 1: Iteration: 200 / 250 [ 80%]  (Adaptation)
+Chain 1: Success! Found best value [eta = 1] earlier than expected.
+Chain 1: 
+Chain 1: Begin stochastic gradient ascent.
+Chain 1:   iter             ELBO   delta_ELBO_mean   delta_ELBO_med   notes 
+Chain 1:    100        -2237.629             1.000            1.000
+Chain 1:    200        -1572.932             0.711            1.000
+Chain 1:    300         -759.144             0.832            1.000
+Chain 1:    400         -762.136             0.625            1.000
+Chain 1:    500         -760.908             0.500            0.423
+Chain 1:    600         -759.832             0.417            0.423
+Chain 1:    700         -760.691             0.358            0.004   MEDIAN ELBO CONVERGED
+Chain 1: 
+Chain 1: Drawing a sample of size 1000 from the approximate posterior... 
+Chain 1: COMPLETED.</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Pareto k diagnostic value is 0.75. Resampling is unreliable.
+Increasing the number of draws or decreasing tol_rel_obj may help.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb63"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="co"># using model2.stan for VI</span></span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a>fit_m1_vi <span class="ot">&lt;-</span> <span class="fu">vb</span>(</span>
+<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stan_model</span>(<span class="st">"model2.stan"</span>),</span>
+<span id="cb63-4"><a href="#cb63-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data      =</span> stan_data_m2,</span>
+<span id="cb63-5"><a href="#cb63-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">algorithm =</span> <span class="st">"meanfield"</span>,</span>
+<span id="cb63-6"><a href="#cb63-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed      =</span> <span class="dv">42</span></span>
+<span id="cb63-7"><a href="#cb63-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Chain 1: ------------------------------------------------------------
+Chain 1: EXPERIMENTAL ALGORITHM:
+Chain 1:   This procedure has not been thoroughly tested and may be unstable
+Chain 1:   or buggy. The interface is subject to change.
+Chain 1: ------------------------------------------------------------
+Chain 1: 
+Chain 1: 
+Chain 1: 
+Chain 1: Gradient evaluation took 9.5e-05 seconds
+Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 0.95 seconds.
+Chain 1: Adjust your expectations accordingly!
+Chain 1: 
+Chain 1: 
+Chain 1: Begin eta adaptation.
+Chain 1: Iteration:   1 / 250 [  0%]  (Adaptation)
+Chain 1: Iteration:  50 / 250 [ 20%]  (Adaptation)
+Chain 1: Iteration: 100 / 250 [ 40%]  (Adaptation)
+Chain 1: Iteration: 150 / 250 [ 60%]  (Adaptation)
+Chain 1: Iteration: 200 / 250 [ 80%]  (Adaptation)
+Chain 1: Success! Found best value [eta = 1] earlier than expected.
+Chain 1: 
+Chain 1: Begin stochastic gradient ascent.
+Chain 1:   iter             ELBO   delta_ELBO_mean   delta_ELBO_med   notes 
+Chain 1:    100        -2222.685             1.000            1.000
+Chain 1:    200        -1853.417             0.600            1.000
+Chain 1:    300        -1097.254             0.629            0.689
+Chain 1:    400         -762.824             0.582            0.689
+Chain 1:    500         -763.833             0.466            0.438
+Chain 1:    600         -757.405             0.389            0.438
+Chain 1:    700         -756.981             0.334            0.199
+Chain 1:    800         -755.586             0.292            0.199
+Chain 1:    900         -756.787             0.260            0.008   MEDIAN ELBO CONVERGED
+Chain 1: 
+Chain 1: Drawing a sample of size 1000 from the approximate posterior... 
+Chain 1: COMPLETED.</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Pareto k diagnostic value is 1.01. Resampling is disabled. Decreasing
+tol_rel_obj may help if variational algorithm has terminated prematurely.
+Otherwise consider using sampling instead.</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb66"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(bayesplot)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: package 'bayesplot' was built under R version 4.5.2</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>This is bayesplot version 1.15.0</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>- Online documentation and vignettes at mc-stan.org/bayesplot</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>- bayesplot theme set to bayesplot::theme_default()</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>   * Does _not_ affect other ggplot2 plots</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>   * See ?bayesplot_theme_set for details on theme setting</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb73"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-3"><a href="#cb73-3" aria-hidden="true" tabindex="-1"></a>pars_of_interest <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">paste0</span>(<span class="st">"beta["</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">8</span>, <span class="st">"]"</span>), <span class="st">"sigma"</span>)</span>
+<span id="cb73-4"><a href="#cb73-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-5"><a href="#cb73-5" aria-hidden="true" tabindex="-1"></a>draws_hmc <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(fit_m1,    <span class="at">pars =</span> pars_of_interest)</span>
+<span id="cb73-6"><a href="#cb73-6" aria-hidden="true" tabindex="-1"></a>draws_vi  <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(fit_m1_vi, <span class="at">pars =</span> pars_of_interest)</span>
+<span id="cb73-7"><a href="#cb73-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-8"><a href="#cb73-8" aria-hidden="true" tabindex="-1"></a>beta_labels <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"USG"</span>,<span class="st">"TO"</span>,<span class="st">"TS"</span>,<span class="st">"PpG"</span>,<span class="st">"RpG"</span>,<span class="st">"ApG"</span>,<span class="st">"SpG"</span>,<span class="st">"BpG"</span>,<span class="st">"sigma"</span>)</span>
+<span id="cb73-9"><a href="#cb73-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-10"><a href="#cb73-10" aria-hidden="true" tabindex="-1"></a><span class="co"># HMC vs VI的posterior density</span></span>
+<span id="cb73-11"><a href="#cb73-11" aria-hidden="true" tabindex="-1"></a>df_hmc <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(draws_hmc) <span class="sc">%&gt;%</span></span>
+<span id="cb73-12"><a href="#cb73-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"parameter"</span>, <span class="at">values_to =</span> <span class="st">"value"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb73-13"><a href="#cb73-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">method =</span> <span class="st">"HMC"</span>)</span>
+<span id="cb73-14"><a href="#cb73-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-15"><a href="#cb73-15" aria-hidden="true" tabindex="-1"></a>df_vi <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(draws_vi) <span class="sc">%&gt;%</span></span>
+<span id="cb73-16"><a href="#cb73-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"parameter"</span>, <span class="at">values_to =</span> <span class="st">"value"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb73-17"><a href="#cb73-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">method =</span> <span class="st">"VI (Mean-field)"</span>)</span>
+<span id="cb73-18"><a href="#cb73-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-19"><a href="#cb73-19" aria-hidden="true" tabindex="-1"></a>df_combined <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(df_hmc, df_vi)</span>
+<span id="cb73-20"><a href="#cb73-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-21"><a href="#cb73-21" aria-hidden="true" tabindex="-1"></a>param_map <span class="ot">&lt;-</span> <span class="fu">setNames</span>(beta_labels, pars_of_interest)</span>
+<span id="cb73-22"><a href="#cb73-22" aria-hidden="true" tabindex="-1"></a>df_combined<span class="sc">$</span>parameter <span class="ot">&lt;-</span> param_map[df_combined<span class="sc">$</span>parameter]</span>
+<span id="cb73-23"><a href="#cb73-23" aria-hidden="true" tabindex="-1"></a>df_combined<span class="sc">$</span>parameter <span class="ot">&lt;-</span> <span class="fu">factor</span>(df_combined<span class="sc">$</span>parameter, <span class="at">levels =</span> beta_labels)</span>
+<span id="cb73-24"><a href="#cb73-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-25"><a href="#cb73-25" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(df_combined, <span class="fu">aes</span>(<span class="at">x =</span> value, <span class="at">fill =</span> method, <span class="at">color =</span> method)) <span class="sc">+</span></span>
+<span id="cb73-26"><a href="#cb73-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb73-27"><a href="#cb73-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>parameter, <span class="at">scales =</span> <span class="st">"free"</span>, <span class="at">ncol =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb73-28"><a href="#cb73-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values  =</span> <span class="fu">c</span>(<span class="st">"HMC"</span> <span class="ot">=</span> <span class="st">"#3266ad"</span>, <span class="st">"VI (Mean-field)"</span> <span class="ot">=</span> <span class="st">"#D85A30"</span>)) <span class="sc">+</span></span>
+<span id="cb73-29"><a href="#cb73-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"HMC"</span> <span class="ot">=</span> <span class="st">"#3266ad"</span>, <span class="st">"VI (Mean-field)"</span> <span class="ot">=</span> <span class="st">"#D85A30"</span>)) <span class="sc">+</span></span>
+<span id="cb73-30"><a href="#cb73-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb73-31"><a href="#cb73-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Posterior distributions: HMC vs VI (Model 1)"</span>,</span>
+<span id="cb73-32"><a href="#cb73-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"VI tends to underestimate posterior variance (narrower curves)"</span>,</span>
+<span id="cb73-33"><a href="#cb73-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Parameter value"</span>, <span class="at">y =</span> <span class="st">"Density"</span>, <span class="at">fill =</span> <span class="st">"Method"</span>, <span class="at">color =</span> <span class="st">"Method"</span></span>
+<span id="cb73-34"><a href="#cb73-34" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb73-35"><a href="#cb73-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
+<span id="cb73-36"><a href="#cb73-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"top"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Second_Draft_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+<div class="sourceCode cell-code" id="cb74"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a><span class="co"># quantify the mean of posterior and difference between SD</span></span>
+<span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb74-3"><a href="#cb74-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Parameter =</span> beta_labels,</span>
+<span id="cb74-4"><a href="#cb74-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">HMC_mean  =</span> <span class="fu">colMeans</span>(draws_hmc),</span>
+<span id="cb74-5"><a href="#cb74-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">VI_mean   =</span> <span class="fu">colMeans</span>(draws_vi),</span>
+<span id="cb74-6"><a href="#cb74-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">HMC_sd    =</span> <span class="fu">apply</span>(draws_hmc, <span class="dv">2</span>, sd),</span>
+<span id="cb74-7"><a href="#cb74-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">VI_sd     =</span> <span class="fu">apply</span>(draws_vi,  <span class="dv">2</span>, sd)</span>
+<span id="cb74-8"><a href="#cb74-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb74-9"><a href="#cb74-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb74-10"><a href="#cb74-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_diff  =</span> <span class="fu">round</span>(<span class="fu">abs</span>(HMC_mean <span class="sc">-</span> VI_mean), <span class="dv">4</span>),</span>
+<span id="cb74-11"><a href="#cb74-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_ratio   =</span> <span class="fu">round</span>(VI_sd <span class="sc">/</span> HMC_sd, <span class="dv">3</span>),       <span class="co"># &lt;1 represents VI undermines variance</span></span>
+<span id="cb74-12"><a href="#cb74-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">VI_narrower =</span> <span class="fu">ifelse</span>(sd_ratio <span class="sc">&lt;</span> <span class="dv">1</span>, <span class="st">"Yes"</span>, <span class="st">"No"</span>)</span>
+<span id="cb74-13"><a href="#cb74-13" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb74-14"><a href="#cb74-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb74-15"><a href="#cb74-15" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(comparison_df)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>        Parameter     HMC_mean     VI_mean     HMC_sd      VI_sd mean_diff
+beta[1]       USG  0.021590187  0.03424573 0.06515496 0.04062844    0.0127
+beta[2]        TO  0.113848006  0.10585604 0.04653124 0.04488684    0.0080
+beta[3]        TS -0.049966986 -0.05389942 0.04537129 0.04161763    0.0039
+beta[4]       PpG  0.849932138  0.82251054 0.10137485 0.03852929    0.0274
+beta[5]       RpG  0.003263227  0.05698512 0.06508981 0.04050299    0.0537
+beta[6]       ApG  0.024909304  0.04347502 0.07064188 0.04268735    0.0186
+beta[7]       SpG  0.053424223  0.05454884 0.05590009 0.03559845    0.0011
+beta[8]       BpG -0.045066400 -0.00781191 0.05481675 0.04272420    0.0373
+sigma       sigma  0.952633693  0.90367339 0.02994793 0.02674266    0.0490
+        sd_ratio VI_narrower
+beta[1]    0.624         Yes
+beta[2]    0.965         Yes
+beta[3]    0.917         Yes
+beta[4]    0.380         Yes
+beta[5]    0.622         Yes
+beta[6]    0.604         Yes
+beta[7]    0.637         Yes
+beta[8]    0.779         Yes
+sigma      0.893         Yes</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb76"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a><span class="co"># visualize SD comparison</span></span>
+<span id="cb76-2"><a href="#cb76-2" aria-hidden="true" tabindex="-1"></a>comparison_df <span class="sc">%&gt;%</span></span>
+<span id="cb76-3"><a href="#cb76-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Parameter <span class="sc">!=</span> <span class="st">"sigma"</span>) <span class="sc">%&gt;%</span>  </span>
+<span id="cb76-4"><a href="#cb76-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Parameter, HMC_sd, VI_sd) <span class="sc">%&gt;%</span></span>
+<span id="cb76-5"><a href="#cb76-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="sc">-</span>Parameter, <span class="at">names_to =</span> <span class="st">"Method"</span>, <span class="at">values_to =</span> <span class="st">"SD"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb76-6"><a href="#cb76-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Method =</span> <span class="fu">ifelse</span>(Method <span class="sc">==</span> <span class="st">"HMC_sd"</span>, <span class="st">"HMC"</span>, <span class="st">"VI"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb76-7"><a href="#cb76-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Parameter, <span class="at">y =</span> SD, <span class="at">fill =</span> Method)) <span class="sc">+</span></span>
+<span id="cb76-8"><a href="#cb76-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">stat =</span> <span class="st">"identity"</span>, <span class="at">position =</span> <span class="st">"dodge"</span>, <span class="at">width =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb76-9"><a href="#cb76-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"HMC"</span> <span class="ot">=</span> <span class="st">"#3266ad"</span>, <span class="st">"VI"</span> <span class="ot">=</span> <span class="st">"#D85A30"</span>)) <span class="sc">+</span></span>
+<span id="cb76-10"><a href="#cb76-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb76-11"><a href="#cb76-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Posterior standard deviation: HMC vs VI"</span>,</span>
+<span id="cb76-12"><a href="#cb76-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"VI consistently underestimates uncertainty (lower SD)"</span>,</span>
+<span id="cb76-13"><a href="#cb76-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Parameter"</span>, <span class="at">y =</span> <span class="st">"Posterior SD"</span></span>
+<span id="cb76-14"><a href="#cb76-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb76-15"><a href="#cb76-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
+<span id="cb76-16"><a href="#cb76-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"top"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Second_Draft_files/figure-html/unnamed-chunk-19-2.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
 
 </main>
 <!-- /main column -->
