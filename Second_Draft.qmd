@@ -309,6 +309,9 @@ log_lik_m2 <- extract_log_lik(fit_m2, merge_chains = FALSE)
 loo_m1 <- loo(log_lik_m1, r_eff = relative_eff(exp(log_lik_m1)))
 loo_m2 <- loo(log_lik_m2, r_eff = relative_eff(exp(log_lik_m2)))
 
+loo_compare(loo_m1, loo_m2)
+```
+```{r}
 cat("\nLoo compare:", loo_compare(loo_m1, loo_m2), "\n")
 ```
 
@@ -689,7 +692,8 @@ comparison_m2 <- data.frame(
 ) %>%
   mutate(
     sd_ratio    = round(VI_sd / HMC_sd, 3),
-    VI_narrower = ifelse(sd_ratio < 1, "Yes", "No")
+    VI_narrower = ifelse(sd_ratio < 1, "Yes", "No"),
+    mean_diff   = round(abs(HMC_mean - VI_mean), 4)
   )
 
 print(comparison_m2)
