@@ -1,0 +1,794 @@
+---
+title: "Appendix"
+format: html
+---
+
+## Data Overview
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(corrplot)
+library(dplyr)
+library(GGally)
+library(car)
+
+NBA_Player_Stats <- read.csv("Datasets/2025-2026 NBA Player Stats - NBAstuffer.csv")
+NBA_Player_Stats <- NBA_Player_Stats[, -1]
+NBA_Player_Contracts <- read.csv("Datasets/2025-26 NBA Player Contracts.csv")
+result <- merge(NBA_Player_Stats, NBA_Player_Contracts, by.x = "NAME", by.y = "Player")
+head(result)
+dim(result)
+```
+
+## Data Cleaning
+
+We notice that our contracted salary columns (X2025.26 to X2030.31) are treated as character instead of numeric because of the extra dollar sign (\$). We must remove the sign and set these to numeric for later analysis.
+
+```{r}
+result <- result %>%
+  mutate(across(starts_with("X20"), ~ as.numeric(gsub("\\$", "", .x))))
+class(result$X2025.26)
+```
+
+We also need to check whether there are any NA values for our response variable; if NA exists we would need to drop that row.
+
+```{r}
+result[is.na(result$X2025.26), ]
+```
+
+There exists one row which misses the value for our response variable, we drop this observation.
+
+```{r}
+result_final <- result[!is.na(result$X2025.26), ]
+dim(result_final)
+```
+
+Next, we select the relevant columns for our research question and rename them for clarity.
+
+```{r}
+NBA_Player_Stats_clean <- result_final[, c("NAME", "TEAM", "CUR", "POS", "AGE", "GP", "MpG", "USG.", "TO.", "TS.", "PpG", "RpG", "ApG", "SpG", "BpG", "X2025.26")]
+
+df <- NBA_Player_Stats_clean
+df <- rename(df, Salary = X2025.26)   # rename salary
+names(df) <- sub("\\..*", "", names(df))  # remove dots in names
+head(df)
+```
+
+## EDA
+
+### Salary Distribution
+
+```{r, warning=FALSE, message=FALSE}
+# Original Salary
+p1 <- ggplot(df, aes(x = Salary)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "steelblue") +
+  labs(title = "Contracted Salary Distribution (2025-2026)")
+
+p1
+
+# Log Salary
+p2 <- ggplot(df, aes(x = log(Salary))) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30) +
+  geom_density(color = "coral") +
+  labs(title = "Log Salary Distribution (2025-2026)")
+
+p2
+```
+
+We notice that the distribution of the contracted salary (X2025.26) is heavily right-skewed. A log transformation is necessary in order to standardize the variable.
+
+### Salary by Position
+
+```{r, warning=FALSE, message=FALSE}
+# Position
+ggplot(df, aes(x = POS, y = log(Salary))) +
+  geom_boxplot() +
+  labs(title = "Side by side boxplot of Log(Salary) by position")
+```
+
+### Outliers Removal
+
+```{r}
+# remove outliers
+df <- df %>%
+  group_by(POS) %>%
+  mutate(
+    Q1 = quantile(log(Salary), 0.25, na.rm = TRUE),
+    Q3 = quantile(log(Salary), 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR
+  ) %>%
+  filter(!(POS %in% c("F", "G") & log(Salary) < lower)) %>%
+  select(-Q1, -Q3, -IQR, -lower) %>%
+  ungroup()
+dim(df)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Position boxplot after data cleaning
+ggplot(df, aes(x = POS, y = log(Salary))) +
+  geom_boxplot() +
+  labs(title = "Side by side boxplot of Log(Salary) by position (after cleaning)")
+```
+
+### Predictor Distributions and Relationships with Log(Salary)
+
+```{r, warning=FALSE, message=FALSE}
+pred_vars <- c("USG", "TO", "TS", "PpG", "RpG", "ApG", "SpG", "BpG")
+
+# Histogram
+df %>%
+  select(all_of(pred_vars)) %>%
+  pivot_longer(everything()) %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 25) +
+  facet_wrap(~name, scales = "free") +
+  labs(title = "Predictor distributions")
+
+# Variables vs log(Salary) Scatterplot
+df %>%
+  mutate(log_salary = log(Salary)) %>%
+  select(log_salary, all_of(pred_vars)) %>%
+  pivot_longer(-log_salary) %>%
+  ggplot(aes(x = value, y = log_salary)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  facet_wrap(~name, scales = "free_x") +
+  labs(title = "Predictors vs log(Salary)")
+```
+
+### Correlation and Multicollinearity Check
+
+```{r, warning=FALSE, message=FALSE}
+# Correlation Plot / Matrix
+cor_mat <- cor(df[, pred_vars], use = "complete.obs")
+corrplot::corrplot(cor_mat, method = "color", addCoef.col = "black",
+                   number.cex = 0.7, tl.cex = 0.8)
+
+# Pairs plot (log Salary)
+df %>%
+  mutate(log_salary = log(Salary)) %>%
+  select(log_salary, all_of(pred_vars)) %>%
+  ggpairs()
+
+# VIF
+ols_fit <- lm(log(Salary) ~ USG + TO + TS + PpG + RpG + ApG + SpG + BpG,
+              data = df)
+vif(ols_fit)
+```
+
+### Scaling for Standardizing Variables
+
+```{r}
+df <- df %>%
+  mutate(
+    log_salary = log(Salary),
+    USG_s = scale(USG)[,1],
+    TO_s  = scale(TO)[,1],
+    TS_s  = scale(TS)[,1],
+    PpG_s = scale(PpG)[,1],
+    RpG_s = scale(RpG)[,1],
+    ApG_s = scale(ApG)[,1],
+    SpG_s = scale(SpG)[,1],
+    BpG_s = scale(BpG)[,1]
+  )
+head(df)
+```
+
+## Model 1: Bayesian Linear Regression
+
+Our naive model is linear regression.
+
+$$\log(salary)_i \sim \mathcal{N}(\alpha + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)$$
+
+And we have
+
+$$\alpha \sim \mathcal{N}(16, 2) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)$$
+
+## Model 2: Hierarchical Bayesian Linear Regression
+
+Our complex model is Hierarchical Linear Regression with position-specific intercepts.
+
+$$\log(salary)_i \sim \mathcal{N}(\alpha_{j_[i]} + \beta_1 \cdot USG_i + \beta_2\cdot TO_i + \beta_3\cdot TS_i + \beta_4 \cdot PpG_i + \beta_5 \cdot RpG_i + \beta_6 \cdot ApG_i + \beta_7 \cdot SpG_i +\beta_8 \cdot BpG_i,\ \sigma^2)$$ Where $j[i]$ represents the i-th basketball player's position, $j = 1,2,...,7$, that we have different 7 positions in total.
+
+$$\alpha_j \sim \mathcal{N}(\mu_\alpha, \tau^2), \ j = 1,2,...,7 \\ \mu_\alpha \sim \mathcal{N}(16,2) \\ \tau \sim \text{Half-Normal}(0, 1) \\ \beta_1, \beta_2, \beta_3, \beta_4, \beta_5, \beta_6, \beta_7, \beta_8 \sim \mathcal{N}(0,1) \\ \sigma \sim \text{Half-Normal}(0, 1)$$
+
+## Run Posterior Using Stan
+
+```{r, warning=FALSE, message=FALSE}
+library(rstan)
+library(loo)
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+
+pred_vars <- c("USG", "TO", "TS", "PpG", "RpG", "ApG", "SpG", "BpG")
+
+# standardize 
+X_raw <- df[, pred_vars]
+X_scaled <- scale(X_raw)
+
+y <- log(df$Salary)
+
+# position index
+pos_levels <- levels(factor(df$POS))
+pos_id     <- as.integer(factor(df$POS, levels = pos_levels))
+J          <- length(pos_levels)
+N          <- nrow(df)
+K          <- length(pred_vars)
+
+cat("N =", N, "| K =", K, "| J =", J, "\n")
+cat("Positions:", pos_levels, "\n")
+
+# model 1 data
+stan_data_m1 <- list(
+  N = N,
+  K = K,
+  X = X_scaled,
+  y = y
+)
+
+fit_m1 <- stan(
+  file    = "model1.stan",
+  data    = stan_data_m1,
+  iter    = 4000,          # 2000 warmup + 2000 sampling
+  warmup  = 2000,
+  chains  = 4,
+  seed    = 42,
+  control = list(adapt_delta = 0.95),
+  refresh = 0
+)
+
+print(fit_m1, pars = c("alpha", "beta", "sigma"), probs = c(0.025, 0.5, 0.975))
+
+# model 2 data
+stan_data_m2 <- list(
+  N      = N,
+  K      = K,
+  J      = J,
+  X      = X_scaled,
+  y      = y,
+  pos_id = pos_id
+)
+
+fit_m2 <- stan(
+  file    = "model2.stan",
+  data    = stan_data_m2,
+  iter    = 4000,
+  warmup  = 2000,
+  chains  = 4,
+  seed    = 42,
+  control = list(adapt_delta = 0.95),
+  refresh = 0
+)
+
+print(fit_m2, pars = c("mu_a", "tau", "alpha", "beta", "sigma"),
+      probs = c(0.025, 0.5, 0.975))
+
+stan_diag_m1 <- summary(fit_m1)$summary
+stan_diag_m2 <- summary(fit_m2)$summary
+
+cat("\nModel 1 - max R-hat:", max(stan_diag_m1[, "Rhat"], na.rm = TRUE), "\n")
+cat("Model 2 - max R-hat:", max(stan_diag_m2[, "Rhat"], na.rm = TRUE), "\n")
+```
+
+## LOO-CV for Result Comparison
+
+```{r, warning=FALSE, message=FALSE}
+# leave one out cross validation
+log_lik_m1 <- extract_log_lik(fit_m1, merge_chains = FALSE)
+log_lik_m2 <- extract_log_lik(fit_m2, merge_chains = FALSE)
+
+loo_m1 <- loo(log_lik_m1, r_eff = relative_eff(exp(log_lik_m1)))
+loo_m2 <- loo(log_lik_m2, r_eff = relative_eff(exp(log_lik_m2)))
+
+loo_compare(loo_m1, loo_m2)
+```
+
+```{r}
+cat("\nLoo compare:", loo_compare(loo_m1, loo_m2), "\n")
+```
+
+## 95% Posterior Predictive Interval of Results
+
+```{r, warning=FALSE, message=FALSE}
+# Model 1
+y_rep_model1  <- extract(fit_m1, "y_rep")$y_rep
+
+# posterior predictive distribution mean & 95% ci（log scale）
+ppd_model1_mean  <- apply(y_rep_model1, 2, mean)
+ppd_model1_lower <- apply(y_rep_model1, 2, quantile, 0.025)
+ppd_model1_upper <- apply(y_rep_model1, 2, quantile, 0.975)
+
+results_model1 <- data.frame(
+  NAME          = df$NAME,
+  POS           = df$POS,
+  Actual_Salary = df$Salary,
+  log_Salary    = y,
+  PPD_mean      = ppd_model1_mean,
+  PPD_lower     = ppd_model1_lower,
+  PPD_upper     = ppd_model1_upper,
+  # change back to original salary
+  Predicted_Salary = exp(ppd_model1_mean),
+  Lower_Salary     = exp(ppd_model1_lower),
+  Upper_Salary     = exp(ppd_model1_upper)
+)
+
+# overpaid / underpaid
+results_model1$Status <- "Fair"
+results_model1$Status[results_model1$log_Salary > results_model1$PPD_upper] <- "Overpaid"
+results_model1$Status[results_model1$log_Salary < results_model1$PPD_lower] <- "Underpaid"
+
+cat("\nOverpaid players:\n")
+print(results_model1[results_model1$Status == "Overpaid",
+              c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
+
+cat("\nUnderpaid players:\n")
+print(results_model1[results_model1$Status == "Underpaid",
+              c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
+
+
+# Model 2
+y_rep_model2  <- extract(fit_m2, "y_rep")$y_rep
+
+# posterior predictive distribution mean & 95% ci（log scale）
+ppd_model2_mean  <- apply(y_rep_model2, 2, mean)
+ppd_model2_lower <- apply(y_rep_model2, 2, quantile, 0.025)
+ppd_model2_upper <- apply(y_rep_model2, 2, quantile, 0.975)
+
+results_model2 <- data.frame(
+  NAME          = df$NAME,
+  POS           = df$POS,
+  Actual_Salary = df$Salary,
+  log_Salary    = y,
+  PPD_mean      = ppd_model2_mean,
+  PPD_lower     = ppd_model2_lower,
+  PPD_upper     = ppd_model2_upper,
+  # change back to original salary
+  Predicted_Salary = exp(ppd_model2_mean),
+  Lower_Salary     = exp(ppd_model2_lower),
+  Upper_Salary     = exp(ppd_model2_upper)
+)
+
+# overpaid / underpaid
+results_model2$Status <- "Fair"
+results_model2$Status[results_model2$log_Salary > results_model2$PPD_upper] <- "Overpaid"
+results_model2$Status[results_model2$log_Salary < results_model2$PPD_lower] <- "Underpaid"
+
+cat("\nOverpaid players:\n")
+print(results_model2[results_model2$Status == "Overpaid",
+              c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
+
+cat("\nUnderpaid players:\n")
+print(results_model2[results_model2$Status == "Underpaid",
+              c("NAME", "POS", "Actual_Salary", "Predicted_Salary")])
+```
+
+### True salaries against the 95% posterior predictive intervals Plot
+
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+make_plot_df <- function(res, model_label) {
+  res %>%
+    arrange(Actual_Salary) %>%
+    mutate(
+      player_idx = row_number(),
+      Model      = model_label,
+      Status     = factor(Status, levels = c("Underpaid", "Fair", "Overpaid"))
+    )
+}
+
+plot_df1 <- make_plot_df(results_model1, "Model 1")
+plot_df2 <- make_plot_df(results_model2, "Model 2")
+plot_df  <- bind_rows(plot_df1, plot_df2)
+
+status_colours <- c(
+  Underpaid = "#2166ac",
+  Fair      = "#b0b0b0",
+  Overpaid  = "#d73027"
+)
+
+salary_cap <- quantile(plot_df$Upper_Salary, 0.97) / 1e6  # clip top 3%
+
+ggplot(plot_df, aes(x = player_idx)) +
+
+  # 95 % posterior predictive interval ribbon
+  geom_ribbon(
+    aes(
+      ymin = pmax(Lower_Salary / 1e6, 0.01),
+      ymax = pmin(Upper_Salary / 1e6, salary_cap)
+    ),
+    fill = "#a8c8e8", alpha = 0.45
+  ) +
+
+  # Predicted salary line
+  geom_line(
+    aes(y = pmin(Predicted_Salary / 1e6, salary_cap)),
+    colour = "#4393c3", linewidth = 0.6, linetype = "dashed"
+  ) +
+
+  # Actual salary dots, coloured by pay status
+  geom_point(
+    aes(y = Actual_Salary / 1e6, colour = Status, size = Status),
+    alpha = 0.9
+  ) +
+
+  scale_colour_manual(values = status_colours, name = "Pay Status") +
+  scale_size_manual(
+    values = c(Underpaid = 2.2, Fair = 1.2, Overpaid = 2.8),
+    guide = "none"
+  ) +
+
+  scale_y_log10(
+    labels = function(x) paste0("$", round(x, 1), "M"),
+    breaks = c(0.5, 1, 2, 5, 10, 20, 40),
+    limits = c(0.3, max(plot_df$Actual_Salary / 1e6) * 1.1)
+  ) +
+
+  facet_wrap(~Model, ncol = 1) +
+
+  labs(
+    title    = "True Salaries vs 95% Posterior Predictive Intervals",
+    subtitle = "Log scale · sorted by actual salary · blue band = 95% CI · dashed = posterior mean",
+    x        = "Player rank (by actual salary)",
+    y        = "Salary (USD millions, log scale)"
+  ) +
+
+  theme_bw(base_size = 13) +
+  theme(
+    legend.position   = "top",
+    legend.key.size   = unit(1.2, "lines"),
+    strip.background  = element_rect(fill = "#e8eef4"),
+    strip.text        = element_text(face = "bold", size = 12),
+    panel.grid.minor  = element_blank(),
+    panel.grid.major  = element_line(colour = "grey90"),
+    plot.title        = element_text(face = "bold", size = 14),
+    plot.subtitle     = element_text(colour = "grey40", size = 10)
+  )
+```
+
+## Variational Inference
+
+```{r, warning=FALSE, message=FALSE}
+# using model1.stan for VI
+fit_m1_vi <- vb(
+  stan_model("model1.stan"),
+  data      = stan_data_m1,
+  algorithm = "meanfield",
+  seed      = 42,
+  refresh = 0
+)
+
+# using model2.stan for VI
+fit_m2_vi <- vb(
+  stan_model("model2.stan"),
+  data      = stan_data_m2,
+  algorithm = "meanfield",
+  seed      = 42,
+  refresh = 0
+)
+```
+
+### Model 1 HMC and VI Comparison plot
+
+```{r, warning=FALSE, message=FALSE}
+library(bayesplot)
+library(tidyverse)
+
+pars_of_interest <- c(paste0("beta[", 1:8, "]"), "sigma")
+
+draws_hmc <- as.matrix(fit_m1,    pars = pars_of_interest)
+draws_vi  <- as.matrix(fit_m1_vi, pars = pars_of_interest)
+
+beta_labels <- c("USG","TO","TS","PpG","RpG","ApG","SpG","BpG","sigma")
+
+# HMC vs VI的posterior density
+df_hmc <- as.data.frame(draws_hmc) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi <- as.data.frame(draws_vi) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+df_combined <- bind_rows(df_hmc, df_vi)
+
+param_map <- setNames(beta_labels, pars_of_interest)
+df_combined$parameter <- param_map[df_combined$parameter]
+df_combined$parameter <- factor(df_combined$parameter, levels = beta_labels)
+
+ggplot(df_combined, aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 3) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Posterior distributions: HMC vs VI (Model 1)",
+    subtitle = "VI tends to underestimate posterior variance (narrower curves)",
+    x = "Parameter value", y = "Density", fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# quantify the mean of posterior and difference between SD
+comparison_df <- data.frame(
+  Parameter = beta_labels,
+  HMC_mean  = colMeans(draws_hmc),
+  VI_mean   = colMeans(draws_vi),
+  HMC_sd    = apply(draws_hmc, 2, sd),
+  VI_sd     = apply(draws_vi,  2, sd)
+) %>%
+  mutate(
+    mean_diff  = round(abs(HMC_mean - VI_mean), 4),
+    sd_ratio   = round(VI_sd / HMC_sd, 3),       # <1 represents VI undermines variance
+    VI_narrower = ifelse(sd_ratio < 1, "Yes", "No")
+  )
+
+print(comparison_df)
+
+# visualize SD comparison
+comparison_df %>%
+  filter(Parameter != "sigma") %>%  
+  select(Parameter, HMC_sd, VI_sd) %>%
+  pivot_longer(-Parameter, names_to = "Method", values_to = "SD") %>%
+  mutate(Method = ifelse(Method == "HMC_sd", "HMC", "VI")) %>%
+  ggplot(aes(x = Parameter, y = SD, fill = Method)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  scale_fill_manual(values = c("HMC" = "#3266ad", "VI" = "#D85A30")) +
+  labs(
+    title    = "Posterior standard deviation: HMC vs VI",
+    subtitle = "VI consistently underestimates uncertainty (lower SD)",
+    x = "Parameter", y = "Posterior SD"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+### Model 2 HMC and VI Comparison plot
+
+```{r, warning=FALSE, message=FALSE}
+
+# extract posterior samples
+pars_beta  <- paste0("beta[",  1:8, "]")
+pars_alpha <- paste0("alpha[", 1:7, "]")
+pars_hyper <- c("mu_a", "tau", "sigma")
+
+pos_labels  <- pos_levels # 7 positions in total
+beta_labels <- c("USG","TO","TS","PpG","RpG","ApG","SpG","BpG")
+
+# comparison for Beta coefficient（HMC vs VI)
+draws_hmc_beta <- as.matrix(fit_m2,    pars = pars_beta)
+draws_vi_beta  <- as.matrix(fit_m2_vi, pars = pars_beta)
+
+df_hmc_beta <- as.data.frame(draws_hmc_beta) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi_beta <- as.data.frame(draws_vi_beta) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+param_map_beta <- setNames(beta_labels, pars_beta)
+
+bind_rows(df_hmc_beta, df_vi_beta) %>%
+  mutate(parameter = param_map_beta[parameter],
+         parameter = factor(parameter, levels = beta_labels)) %>%
+  ggplot(aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 4) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Beta posteriors — HMC vs VI",
+    subtitle = "Shared coefficients across all positions",
+    x = "Parameter value", y = "Density",
+    fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# compare: Position intercepts alpha[j]  ─────────────
+draws_hmc_alpha <- as.matrix(fit_m2,    pars = pars_alpha)
+draws_vi_alpha  <- as.matrix(fit_m2_vi, pars = pars_alpha)
+
+param_map_alpha <- setNames(pos_labels, pars_alpha)
+
+df_hmc_alpha <- as.data.frame(draws_hmc_alpha) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi_alpha <- as.data.frame(draws_vi_alpha) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+bind_rows(df_hmc_alpha, df_vi_alpha) %>%
+  mutate(parameter = param_map_alpha[parameter],
+         parameter = factor(parameter, levels = pos_labels)) %>%
+  ggplot(aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 4) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Position intercepts α_j — HMC vs VI",
+    subtitle = "Each position has its own intercept — key feature of hierarchical model",
+    x = "Parameter value", y = "Density",
+    fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# compare Hyperparameters: mu_a, tau, sigma 
+draws_hmc_hyper <- as.matrix(fit_m2,    pars = pars_hyper)
+draws_vi_hyper  <- as.matrix(fit_m2_vi, pars = pars_hyper)
+
+df_hmc_hyper <- as.data.frame(draws_hmc_hyper) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "HMC")
+
+df_vi_hyper <- as.data.frame(draws_vi_hyper) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  mutate(method = "VI (Mean-field)")
+
+bind_rows(df_hmc_hyper, df_vi_hyper) %>%
+  mutate(parameter = factor(parameter, levels = pars_hyper)) %>%
+  ggplot(aes(x = value, fill = method, color = method)) +
+  geom_density(alpha = 0.3, linewidth = 0.8) +
+  facet_wrap(~parameter, scales = "free", ncol = 3) +
+  scale_fill_manual(values  = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  scale_color_manual(values = c("HMC" = "#3266ad", "VI (Mean-field)" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Hyperparameters — HMC vs VI",
+    subtitle = "mu_a = global mean intercept, tau = between-position SD",
+    x = "Parameter value", y = "Density",
+    fill = "Method", color = "Method"
+  ) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# Quantify the SD comparison for all parameters
+all_pars   <- c(pars_beta, pars_alpha, pars_hyper)
+all_labels <- c(beta_labels, pos_labels, pars_hyper)
+
+draws_hmc_all <- as.matrix(fit_m2,    pars = all_pars)
+draws_vi_all  <- as.matrix(fit_m2_vi, pars = all_pars)
+
+comparison_m2 <- data.frame(
+  Parameter = all_labels,
+  Type      = c(rep("Beta", 8), rep("Alpha (position)", 7), rep("Hyperparameter", 3)),
+  HMC_mean  = colMeans(draws_hmc_all),
+  VI_mean   = colMeans(draws_vi_all),
+  HMC_sd    = apply(draws_hmc_all, 2, sd),
+  VI_sd     = apply(draws_vi_all,  2, sd)
+) %>%
+  mutate(
+    sd_ratio    = round(VI_sd / HMC_sd, 3),
+    VI_narrower = ifelse(sd_ratio < 1, "Yes", "No"),
+    mean_diff   = round(abs(HMC_mean - VI_mean), 4)
+  )
+
+print(comparison_m2)
+
+# SD comparison visualization by bar chart(differs in position)
+comparison_m2 %>%
+  select(Parameter, Type, HMC_sd, VI_sd) %>%
+  pivot_longer(c(HMC_sd, VI_sd), names_to = "Method", values_to = "SD") %>%
+  mutate(Method = ifelse(Method == "HMC_sd", "HMC", "VI")) %>%
+  ggplot(aes(x = Parameter, y = SD, fill = Method)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  facet_wrap(~Type, scales = "free_x", ncol = 1) +
+  scale_fill_manual(values = c("HMC" = "#3266ad", "VI" = "#D85A30")) +
+  labs(
+    title    = "Model 2: Posterior SD comparison — HMC vs VI",
+    subtitle = "VI consistently produces narrower posteriors across all parameter types",
+    x = NULL, y = "Posterior SD"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    axis.text.x     = element_text(angle = 45, hjust = 1)
+  )
+```
+
+### Stan Code for Model 1
+
+```{r}
+data {
+  int<lower=0> N; // number of observations
+  int<lower=0> K; // number of betas
+  matrix[N, K] X; // predictor matrix (standardized)
+  vector[N] y;    // log(Salary)
+}
+
+parameters {
+  real alpha;
+  vector[K] beta;
+  real<lower=0> sigma;
+}
+
+model {
+  // Priors
+  alpha ~ normal(16, 2);
+  beta  ~ normal(0, 1);
+  sigma ~ normal(0, 1);
+
+  // Likelihood
+  y ~ normal(X * beta + alpha, sigma);
+}
+
+generated quantities {
+  // Posterior predictive distribution
+  vector[N] y_rep;    // posterior predictive distribution data - result
+  vector[N] log_lik;  // pointwise log-likelihood
+  vector[N] residual; // residuals on log scale
+
+  for (n in 1:N) {
+    real mu_n = alpha + X[n] * beta;
+    y_rep[n]   = normal_rng(mu_n, sigma);
+    log_lik[n] = normal_lpdf(y[n] | mu_n, sigma);
+    residual[n] = y[n] - mu_n;
+  }
+}
+```
+
+### Stan Code for Model 2
+
+```{r}
+data {
+  int<lower=0> N; // number of observations
+  int<lower=0> K; // number of betas
+  int<lower=0> J; // number of positions
+  matrix[N, K] X; // predictor matrix (standardized)
+  vector[N] y;    // log(Salary)
+  array[N] int<lower=1, upper=J> pos_id;  // position index for each player
+}
+
+parameters {
+  // Hyperparameters (group-level)
+  real mu_a; // mean of position intercepts
+  real<lower=0> tau; // SD of position intercepts
+
+  // Group-level parameters
+  vector[J] alpha; // position-specific intercepts
+
+  // Population-level parameters
+  vector[K] beta; // shared regression coefficients
+  real<lower=0> sigma; // residual SD
+}
+
+model {
+  // Hyperpriors
+  mu_a ~ normal(16, 2);
+  tau  ~ normal(0, 1);
+
+  // Group-level priors (partial pooling)
+  alpha ~ normal(mu_a, tau);
+
+  // Priors on coefficients
+  beta  ~ normal(0, 1);
+  sigma ~ exponential(1);
+
+  // Likelihood
+  for (n in 1:N) {
+    y[n] ~ normal(alpha[pos_id[n]] + X[n] * beta, sigma);
+  }
+}
+
+generated quantities {
+  // Posterior predictive distribution
+  vector[N] y_rep;    // posterior predictive distribution data - result
+  vector[N] log_lik;  // pointwise log-likelihood
+  vector[N] residual; // residuals on log scale
+
+  for (n in 1:N) {
+    real mu_n = alpha[pos_id[n]] + X[n] * beta;
+    y_rep[n]   = normal_rng(mu_n, sigma);
+    log_lik[n] = normal_lpdf(y[n] | mu_n, sigma);
+    residual[n] = y[n] - mu_n;
+  }
+}
+```
